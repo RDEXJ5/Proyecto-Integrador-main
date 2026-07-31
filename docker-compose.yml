@@ -87,8 +87,8 @@ services:
     restart: unless-stopped
     depends_on: [api1, api2, web1, web2]
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
       - "127.0.0.1:8404:8404"
     volumes:
       - haproxy_certs:/certs

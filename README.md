@@ -33,14 +33,15 @@ debe integrarse un proveedor/certificado admitido por el marco aplicable.
    docker compose up --build
    ```
 
-3. El proxy queda disponible en `https://localhost`. El certificado que genera
+3. El proxy queda disponible en `https://localhost:8443` (y
+   `http://localhost:8080` redirige a HTTPS). El certificado que genera
    HAProxy es autofirmado y solamente sirve para desarrollo. Prometheus y
    Grafana se exponen exclusivamente en `127.0.0.1`.
 4. Crea el primer administrador una única vez. Ajusta las claves con los
    valores reales de `.env`:
 
    ```powershell
-   curl.exe -k -X POST https://localhost/api/auth/bootstrap-admin `
+   curl.exe -k -X POST https://localhost:8443/api/auth/bootstrap-admin `
      -H "X-API-Key: <API_APPLICATION_KEY>" `
      -H "X-Bootstrap-Token: <BOOTSTRAP_TOKEN>" `
      -H "Content-Type: application/json" `
