@@ -1,118 +1,137 @@
 services:
   mysql:
-    image: mysql:8.0
-    container_name: API_mysql
-    restart: always
+    image: mysql:8.4
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: gestion_documental
-      MYSQL_USER: gestion_user
-      MYSQL_PASSWORD: gestion_pass
-    ports:
-      - "3308:3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-control_documental}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_data:/var/lib/mysql
-    networks:
-      - legal_net
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [private]
 
-  api_v4:
-    build:
-      context: ./API
-      dockerfile: Dockerfile
-    container_name: api_v4
-    restart: always
-    env_file:
-      - .env
-    depends_on:
-      - mysql
-    ports:
-      - "8004:8000"
-    command: uvicorn main_v4:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./API:/app
-    networks:
-      - legal_net
-
-
-  api2_v4:
-    build:
-      context: ./API2
-      dockerfile: Dockerfile
-    container_name: api2_v4
-    restart: always
-    env_file:
-      - .env
-    depends_on:
-      - mysql
-    ports:
-      - "8006:8000"
-    command: uvicorn main_v4:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./API2:/app
-    networks:
-      - legal_net
-
-
-  flask_app:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: flask_api_documental
-    restart: always
-    env_file:
-      - .env
-    depends_on:
-      - api_v4
-    ports:
-      - "9000:9000"
-    volumes:
-      - ./frontend:/app
-    networks:
-      - legal_net
-
-  laravel_app:
-    build:
-      context: ./laravel
-      dockerfile: Dockerfile
-    container_name: laravel_app
-    restart: always
+  api1:
+    build: ./API
+    restart: unless-stopped
     environment:
-      APP_NAME: Laravel
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost
-      DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_DATABASE: gestion_documental
-      DB_USERNAME: gestion_user
-      DB_PASSWORD: gestion_pass
+      DB_NAME: ${MYSQL_DATABASE:-control_documental}
+      DB_USER: ${MYSQL_USER:-appuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FILE_ENCRYPTION_KEY: ${FILE_ENCRYPTION_KEY}
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN}
+      APP_ENV: ${APP_ENV:-development}
     depends_on:
-      - mysql
-    ports:
-      - "8005:8000"
-    networks:
-      - legal_net
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: nginx_proxy
-    restart: always
-    depends_on:
-      - api_v4
-      - flask_app
-      - laravel_app
-    ports:
-      - "8080:80"
+      mysql:
+        condition: service_healthy
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - legal_net
+      - document_storage:/app/storage
+    networks: [application, private, monitoring]
+
+  api2:
+    build: ./API
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:-control_documental}
+      DB_USER: ${MYSQL_USER:-appuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FILE_ENCRYPTION_KEY: ${FILE_ENCRYPTION_KEY}
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN}
+      APP_ENV: ${APP_ENV:-development}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - document_storage:/app/storage
+    networks: [application, private, monitoring]
+
+  web1:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api1:8000
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      COOKIE_SECURE: "true"
+    depends_on: [api1]
+    networks: [application]
+
+  web2:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api2:8000
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      COOKIE_SECURE: "true"
+    depends_on: [api2]
+    networks: [application]
+
+  haproxy:
+    build: ./haproxy
+    restart: unless-stopped
+    depends_on: [api1, api2, web1, web2]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8404:8404"
+    volumes:
+      - haproxy_certs:/certs
+    networks: [application, monitoring]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    networks: [monitoring]
+
+networks:
+  application:
+  private:
+    internal: true
+  monitoring:
+    internal: true
 
 volumes:
   mysql_data:
-
-networks:
-  legal_net:
+  document_storage:
+  haproxy_certs:
+  prometheus_data:
+  grafana_data:

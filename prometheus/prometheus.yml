@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+  - job_name: document-api
+    static_configs:
+      - targets: ["api1:8000", "api2:8000"]
+  - job_name: haproxy
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["haproxy:8405"]

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero compact"><div><p class="eyebrow">{{ document.kind }}</p><h1>{{ document.title }}</h1><p>{{ document.description or 'Documento sin descripción.' }}</p></div>{% if document.contains_sensitive_data %}<span class="sensitive">datos sensibles</span>{% endif %}</section>
+<section class="panel"><div class="section-title"><h2>Historial inmutable de versiones</h2><span>{{ versions|length }}</span></div>
+{% for version in versions %}
+<article class="version"><div><strong>Versión {{ version.version_number }} · {{ version.original_name }}</strong><p>SHA-256: <code>{{ version.sha256 }}</code></p><small>{{ version.size_bytes }} bytes · {{ version.compression }} · {{ version.storage_tier }}</small></div>
+<div class="actions">
+  {% if current_user.role in ['notary', 'judge'] %}<a class="button secondary" href="{{ url_for('download_version', version_id=version.id) }}">Abrir web</a>{% endif %}
+  {% if current_user.role == 'notary' %}<form method="post" action="{{ url_for('authorize_version', version_id=version.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="decision" value="authorized"><input type="hidden" name="note" value="Validado contra documento físico."><button class="button">Autorizar</button></form>{% endif %}
+  {% if current_user.role == 'judge' %}<form method="post" action="{{ url_for('sign_version', version_id=version.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button">Firmar</button></form>{% endif %}
+</div></article>
+{% else %}<p class="empty">Todavía no se ha cargado ninguna versión.</p>{% endfor %}</section>
+{% if current_user.role in ['admin', 'notary', 'lawyer', 'party', 'witness'] %}<section class="panel"><h2>Nueva versión</h2><form method="post" enctype="multipart/form-data" action="{{ url_for('add_version', document_id=document.id) }}" class="inline-upload"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="file" type="file" required><button class="primary">Registrar nueva versión</button></form></section>{% endif %}
+{% endblock %}

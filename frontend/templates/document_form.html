@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="form-card"><p class="eyebrow">Primera versión</p><h1>Registrar documento</h1>
+<form method="post" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>ID del expediente<input name="case_id" type="number" min="1" required></label>
+  <label>ID del propietario<input name="owner_id" type="number" min="1" required></label>
+  <label>Tipo<select name="kind"><option value="marriage_certificate">Acta matrimonial</option><option value="personal_identification">INE / identificación</option><option value="curp">CURP</option><option value="birth_certificate">Acta de nacimiento</option><option value="rfc">RFC</option><option value="proof_of_address">Comprobante de domicilio</option><option value="witness_identification">INE de testigo</option><option value="libel">Libelo manuscrito</option><option value="judgment">Juicio / resolución</option><option value="other">Otro</option></select></label>
+  <label>Título<input name="title" required></label>
+  <label>Descripción<textarea name="description" rows="3"></textarea></label>
+  <label class="check"><input type="checkbox" name="contains_sensitive_data" checked> Contiene datos personales sensibles</label>
+  <label>Archivo<input name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt" required></label>
+  <button class="primary">Cifrar y registrar versión 1</button>
+</form></section>
+{% endblock %}
+

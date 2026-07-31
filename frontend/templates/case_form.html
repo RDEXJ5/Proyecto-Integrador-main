@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="form-card"><p class="eyebrow">Nuevo expediente</p><h1>Registrar caso</h1>
+<form method="post" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Folio único<input name="folio" placeholder="NM-2026-0001" required></label>
+  <label>Título del asunto<input name="title" required></label>
+  <label>Descripción<textarea name="description" rows="3"></textarea></label>
+  <label>ID del abogado responsable<input name="lawyer_id" type="number" min="1" required></label>
+  <label>ID del juez asignado (opcional)<input name="judge_id" type="number" min="1"></label>
+  <button class="primary">Crear expediente inmutable</button>
+</form></section>
+{% endblock %}
+

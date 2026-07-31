@@ -7,3 +7,7 @@ python-jose[cryptography]
 bcrypt
 slowapi
 email-validator
+cryptography
+pydantic-settings
+python-multipart
+prometheus-fastapi-instrumentator

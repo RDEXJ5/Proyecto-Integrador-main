@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Acceso seguro · Expediente Íntegro{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <p class="eyebrow">Sistema de nulidad matrimonial</p>
+  <h1>Acceso al expediente</h1>
+  <p>La plataforma conserva cada acción, versión, autorización y firma de integridad.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Correo electrónico<input name="email" type="email" autocomplete="username" required></label>
+    <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary">Iniciar sesión</button>
+  </form>
+  <p class="hint">La cuenta administradora inicial se crea una sola vez desde el endpoint de bootstrap protegido.</p>
+</section>
+{% endblock %}
+
