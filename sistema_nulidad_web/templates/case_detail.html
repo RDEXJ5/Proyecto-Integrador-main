@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ case.folio }} - Sistema Integral de Gestión Documental{% endblock %}
+{% block title %}{{ case.folio }} - Expediente Íntegro{% endblock %}
 {% block content %}
   <a class="back-link" href="{{ url_for('workspace_dashboard', workspace_code=active_workspace.code) }}">Volver al espacio de trabajo</a>
 
@@ -356,7 +356,7 @@
           <h2>Aportación documental</h2>
           <p>El servicio central comprobará el contenido real, aplicará la regla del tipo y creará la primera versión sin sobrescrituras.</p>
         </div>
-        <span class="read-only-badge">PDF, JPG y PNG</span>
+        <span class="read-only-badge">PDF, JPG, PNG y DOCX</span>
       </div>
       <details class="creation-disclosure">
         <summary class="button button-primary">+ Agregar documento</summary>
@@ -385,7 +385,7 @@
         </label>
         <label class="file-field">
           <span>Archivo, máximo 25 MB</span>
-          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required>
+          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required>
         </label>
         <div class="form-actions">
           <small>Origen registrado: archivo cargado desde la versión web.</small>

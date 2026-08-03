@@ -131,7 +131,7 @@ Las secciones repetidas se consolidaron. Por ejemplo, revisión usa `Expedientes
 
 ### Documentos
 
-- Carga web de PDF, JPG y PNG existentes. DOCX no forma parte de los formatos admitidos.
+- Carga web de PDF, JPG, PNG y DOCX existentes.
 - Validación del tipo real y límites de tamaño.
 - Cifrado antes de guardar en MinIO y comprobación SHA-256 al leer.
 - Registro de origen: `web_file`, `mobile_file`, `mobile_camera` o migración histórica.
@@ -373,11 +373,10 @@ sistema_nulidad_web/static/document-viewer.mjs
 La base web es funcional para los flujos implementados, pero el producto no debe considerarse terminado para producción. El siguiente trabajo recomendado es:
 
 1. Implementar el proveedor real de OCR y detección/verificación de firmas usando las tablas de trabajos y resultados ya existentes, siempre respetando la política del tipo documental.
-2. Ampliar pruebas integrales por rol, casos no asignados, estados lógicos y fallos de MinIO.
-3. Antes de producción: HTTPS y proxy inverso, rotación de secretos, contraseñas robustas, verificación de correo, MFA o recuperación segura, escaneo antimalware, copias de seguridad, restauración probada, monitoreo y estrategia de alta disponibilidad.
-4. Definir el alcance legal de la firma: la firma de integridad actual no sustituye automáticamente una firma electrónica cualificada o un certificado legal.
-
-Las membresías organizativas permanecen como soporte interno de compatibilidad en la base de datos, pero su administración no forma parte del alcance funcional del sistema.
+2. Completar la conversión segura de DOCX a PDF para vista previa; hoy DOCX puede almacenarse, pero no se convierte para el visor.
+3. Ampliar pruebas integrales por rol, casos no asignados, estados lógicos y fallos de MinIO.
+4. Antes de producción: HTTPS y proxy inverso, rotación de secretos, contraseñas robustas, verificación de correo, MFA o recuperación segura, escaneo antimalware, copias de seguridad, restauración probada, monitoreo y estrategia de alta disponibilidad.
+5. Definir el alcance legal de la firma: la firma de integridad actual no sustituye automáticamente una firma electrónica cualificada o un certificado legal.
 
 No volver a crear desde cero la base, API, web, MinIO, visor PDF, espacios de trabajo, filtros, formularios desplegables, RBAC o las traducciones: todos esos elementos ya están implementados.
 

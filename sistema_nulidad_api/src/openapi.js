@@ -107,7 +107,7 @@ export const openapiDocument = {
           file: {
             type: 'string',
             format: 'binary',
-            description: 'PDF, JPG o PNG; máximo 25 MB. El tipo se detecta desde el contenido.'
+            description: 'PDF, JPG, PNG o DOCX; máximo 25 MB. El tipo se detecta desde el contenido.'
           }
         }
       },
@@ -118,7 +118,7 @@ export const openapiDocument = {
           file: {
             type: 'string',
             format: 'binary',
-            description: 'Archivo PDF, JPG o PNG de la nueva versión. Nunca reemplaza una versión anterior.'
+            description: 'Archivo de la nueva versión. Nunca reemplaza una versión anterior.'
           }
         }
       },

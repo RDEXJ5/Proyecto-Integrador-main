@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ document.title }} - Sistema Integral de Gestión Documental{% endblock %}
+{% block title %}{{ document.title }} - Expediente Íntegro{% endblock %}
 {% block content %}
   <a class="back-link" href="{{ url_for('case_detail', case_id=document.case_id) }}">Volver a documentos</a>
 
@@ -39,7 +39,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="file-field">
           <span>Archivo, máximo 25 MB</span>
-          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required>
+          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required>
         </label>
         <button class="button button-primary" type="submit">Crear versión</button>
       </form>

@@ -777,7 +777,7 @@ def build_document() -> Path:
         ("Localiza Agregar documento", "El formulario solo aparece cuando tu sesión posee document.create."),
         ("Selecciona el tipo documental", "Este paso determina autorización, certificación, firma y análisis; no elijas un tipo aproximado."),
         ("Escribe título y descripción", "Utiliza un nombre comprensible y contexto suficiente para revisión."),
-        ("Selecciona el archivo", "La web acepta PDF, JPG, JPEG o PNG válidos. El tipo se detecta por contenido, no solo por extensión."),
+        ("Selecciona el archivo", "La web acepta PDF, JPG, JPEG, PNG o DOCX válidos. El tipo se detecta por contenido, no solo por extensión."),
         ("Guarda el documento", "La API calcula SHA-256, comprime si conviene, cifra con AES-256-GCM y almacena el objeto en MinIO."),
         ("Confirma el resultado", "Abre el documento y comprueba versión 1, origen web_file, tamaño, hash y estado available."),
     ])
@@ -796,7 +796,7 @@ def build_document() -> Path:
         "Selecciona Ver en esta página en la versión deseada.",
         "PDF.js muestra PDFs dentro de la misma página y permite cambiar página y zoom.",
         "JPG y PNG se muestran como imagen protegida.",
-        "Los documentos DOCX no se admiten. Convierte el archivo a PDF antes de registrarlo en el sistema.",
+        "DOCX se almacena, pero debe convertirse a PDF para una vista segura; el sistema no provoca una descarga accidental.",
         "El botón Descargar original solo aparece a Juez o Notario con document.download.web.",
         "La apertura y cualquier descarga autorizada generan eventos separados de auditoría.",
     ])
@@ -1000,9 +1000,9 @@ def build_document() -> Path:
         ["403 al abrir un caso", "No existe asignación activa o el canal/rol no coincide.", "Pide a Gestión procesal revisar la asignación; no cambies el ID de la URL."],
         ["El caso no aparece", "Está oculto, cerrado o asignado a otra persona.", "Comprueba estado, visibilidad, alcance y fecha de fin de asignación."],
         ["No aparece Descargar", "El perfil carece de document.download.web.", "Es comportamiento esperado; solo juez/notario autorizados descargan."],
-        ["DOCX rechazado", "Word no forma parte de los formatos permitidos.", "Convierte el documento a PDF antes de cargarlo."],
+        ["DOCX no se visualiza", "El visor protegido no renderiza Word.", "Convierte una copia a PDF y crea una nueva versión; conserva el DOCX original si corresponde."],
         ["409 al firmar/certificar", "Política no aplicable, observación abierta o paso previo pendiente.", "Lee los estados de la versión y completa el flujo en orden."],
-        ["Archivo rechazado", "El contenido no es PDF/JPG/PNG válido o supera el límite.", "Verifica el archivo real, no solo su extensión, y revisa MAX_DOCUMENT_BYTES."],
+        ["Archivo rechazado", "Contenido no es PDF/JPG/PNG/DOCX válido o supera el límite.", "Verifica el archivo real, no solo su extensión, y revisa MAX_DOCUMENT_BYTES."],
         ["MinIO no disponible", "Servicio, credenciales o bucket no están listos.", "Revisa logs minio y minio-setup; no publiques el bucket como público."],
     ], [2350, 2950, 4060], font_size=8.0)
     add_heading(doc, "14.1 Comandos de diagnóstico", 2)
@@ -1041,7 +1041,7 @@ def build_document() -> Path:
     acceptance = [
         ["Acceso", "Cada cuenta web entra a su espacio y parte/testigo son rechazados por la web.", "☐"],
         ["Asignación", "Un usuario solo ve casos asignados; un ID ajeno devuelve 403/404 controlado.", "☐"],
-        ["Carga", "Un PDF/JPG/PNG válido crea el documento y su versión en MinIO.", "☐"],
+        ["Carga", "PDF/JPG/PNG/DOCX válido crea documento y versión en MinIO.", "☐"],
         ["Versiones", "La corrección crea una versión superior y conserva la anterior.", "☐"],
         ["Visor", "PDF e imagen abren en la misma página sin botón de descarga para perfil restringido.", "☐"],
         ["Política", "Un tipo sin firma muestra No requerida y no bloquea el flujo.", "☐"],

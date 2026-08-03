@@ -312,6 +312,14 @@
         <div class="filter-empty-state" data-filter-empty hidden>No hay tipos documentales que coincidan con los filtros.</div>
       </section>
     {% else %}<div class="empty-state"><h3>No hay tipos documentales</h3><p>El servicio central no devolvió políticas configuradas.</p></div>{% endif %}
+  {% elif workspace.code == 'administration' and section_code == 'configuration' %}
+    {% set configuration = administration_data.configuration or {} %}<div class="record-summary"><div><span>Entorno de ejecución</span><strong>{{ configuration.environment|ui_label('environment') }}</strong></div><div><span>Duración de la sesión</span><strong>{{ configuration.jwtExpiresIn|ui_label('duration') }}</strong></div><div><span>Almacenamiento documental</span><strong>{{ configuration.storageProvider|ui_label('provider') }}</strong></div><div><span>Conservación de archivos</span><strong>{{ configuration.objectRetention|ui_label('retention') }}</strong></div><div><span>Tamaño máximo por archivo</span><strong>{{ configuration.maxDocumentBytes|file_size }}</strong></div><div><span>Credenciales visibles</span><strong>{{ 'Sí' if configuration.secretsExposed else 'No' }}</strong></div></div>
+  {% elif section_code == 'health' and health_status %}
+    <div class="health-grid">
+      <article class="metric-card"><strong>{{ health_status.api|ui_label('status') }}</strong><span>Servicio de la aplicación</span><small>Operaciones del sistema</small></article>
+      <article class="metric-card"><strong>{{ health_status.database|ui_label('status') }}</strong><span>Base de datos</span><small>Conectividad reportada</small></article>
+      <article class="metric-card"><strong>{{ health_status.storage|ui_label('status') }}</strong><span>Almacenamiento documental</span><small>Servicio privado de archivos</small></article>
+    </div>
   {% else %}
     <div class="module-placeholder">
       <span class="module-code">{{ section_label|upper }}</span>

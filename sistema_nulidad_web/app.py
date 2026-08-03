@@ -474,13 +474,15 @@ WORKSPACES: dict[str, dict[str, Any]] = {
         "label": "Administración técnica",
         "eyebrow": "OPERACIÓN DE PLATAFORMA",
         "title": "Administración técnica",
-        "description": "Gestiona identidades, permisos y catálogos sin intervenir en decisiones jurídicas.",
+        "description": "Gestiona identidades, permisos, catálogos y salud sin intervenir en decisiones jurídicas.",
         "roles": ("admin",),
         "sections": (
             ("dashboard", "Inicio"),
             ("users", "Usuarios"),
             ("roles", "Roles y permisos"),
             ("catalogs", "Catálogos"),
+            ("configuration", "Configuración"),
+            ("health", "Salud del sistema"),
         ),
     },
 }
@@ -560,6 +562,7 @@ DASHBOARD_SHORTCUTS: dict[str, tuple[dict[str, str], ...]] = {
     "administration": (
         {"section": "users", "label": "Usuarios", "description": "Gestiona cuentas mediante estados lógicos."},
         {"section": "catalogs", "label": "Catálogos", "description": "Configura tipos y políticas documentales."},
+        {"section": "health", "label": "Salud del sistema", "description": "Comprueba API, base de datos y almacenamiento."},
     ),
 }
 
@@ -585,9 +588,9 @@ WORKSPACE_GUIDES: dict[str, tuple[str, ...]] = {
         "Genera un reporte sin modificar la evidencia de origen.",
     ),
     "administration": (
+        "Comprueba primero la salud de los servicios.",
         "Gestiona identidades y roles con un motivo auditable.",
         "Mantén catálogos y políticas sin intervenir en decisiones jurídicas.",
-        "Consulta el historial antes de modificar el estado o los permisos de una cuenta.",
     ),
 }
 
@@ -935,7 +938,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         session["active_workspace"] = workspace_code
         workspace = workspace_model(workspace_code)
         cases, notice = load_workspace_cases(app, workspace_code)
-        health_status = None
+        health_status = load_health_status(app) if workspace_code == "administration" else None
         module_data: dict[str, Any] = {}
         if workspace_code == "audit":
             module_data = call_api(app, "GET", "audit/overview")
@@ -980,7 +983,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if section_code in {"observations", "notifications"}:
             observation_payload = call_api(app, "GET", "observations")
             observations = observation_payload.get("observations") or []
-        health_status = None
+        health_status = load_health_status(app) if workspace_code == "administration" and section_code == "health" else None
         process_catalogs: dict[str, Any] = {}
         audit_data: dict[str, Any] = {}
         administration_data: dict[str, Any] = {}
@@ -993,6 +996,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 "users": "administration/users",
                 "roles": "administration/roles",
                 "catalogs": "administration/catalogs",
+                "configuration": "administration/configuration",
             }
             endpoint = endpoint_by_section.get(section_code)
             if endpoint:
@@ -1029,6 +1033,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             profile_permissions=profile_data.get("permissions") or [],
             role_history=profile_data.get("roleHistory") or [],
             status_history=profile_data.get("statusHistory") or [],
+            unit_memberships=profile_data.get("unitMemberships") or [],
         )
 
     # Rutas de compatibilidad con los paneles originales.
@@ -1095,7 +1100,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             abort(403, description="Tu perfil no puede cargar documentos.")
         uploaded_file = request.files.get("file")
         if not uploaded_file or not uploaded_file.filename:
-            flash("Selecciona un archivo PDF, JPG o PNG.", "error")
+            flash("Selecciona un archivo PDF, JPG, PNG o DOCX.", "error")
             return redirect(url_for("case_detail", case_id=case_id))
         payload = call_api(
             app,
@@ -1682,11 +1687,12 @@ def build_workspace_metrics(
         ]
     if workspace_code == "administration":
         overview = (module_data or {}).get("overview") or {}
+        is_available = bool(health_status and health_status.get("available"))
         return [
-            {"value": overview.get("user_count", 0), "label": "Usuarios registrados", "detail": "Identidades conservadas"},
-            {"value": overview.get("active_user_count", 0), "label": "Usuarios activos", "detail": "Cuentas habilitadas"},
-            {"value": overview.get("role_count", 0), "label": "Roles disponibles", "detail": "Perfiles configurados"},
-            {"value": overview.get("active_document_type_count", 0), "label": "Tipos documentales", "detail": "Catálogo activo"},
+            {"value": "En línea" if is_available else "Revisar", "label": "API", "detail": "Conectividad"},
+            {"value": ui_label((health_status or {}).get("database"), "status"), "label": "Base de datos", "detail": "Estado reportado"},
+            {"value": overview.get("active_user_count", 0), "label": "Usuarios activos", "detail": f"{overview.get('user_count', 0)} registrados"},
+            {"value": ui_label((health_status or {}).get("storage"), "status"), "label": "Almacenamiento", "detail": "MinIO privado"},
         ]
     return []
 
