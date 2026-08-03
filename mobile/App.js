@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Linking,
@@ -23,6 +24,7 @@ import { theme } from './theme';
 
 const MOBILE_ROLES = ['party', 'witness'];
 const SUPPORT_EMAIL = 'cristian05corona@gmail.com';
+const SYSTEM_LOGO = require('./assets/logo.png');
 const ROLE_COPY = {
   party: {
     heading: 'Mi expediente',
@@ -573,9 +575,16 @@ function MobileApp() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.brandMark}><Text style={styles.brandInitials}>EI</Text></View>
+        <View style={[styles.loginLogoFrame, isCompact && styles.loginLogoFrameCompact]}>
+          <Image
+            source={SYSTEM_LOGO}
+            style={styles.loginLogo}
+            resizeMode="contain"
+            accessibilityLabel="Logotipo del Sistema Integral de Gestión Documental"
+          />
+        </View>
         <View style={styles.loginBadge}><Text style={styles.loginBadgeText}>PORTAL MÓVIL SEGURO</Text></View>
-        <Text style={[styles.title, isCompact && styles.titleCompact]}>Expediente Íntegro</Text>
+        <Text style={[styles.title, isCompact && styles.titleCompact]}>Sistema Integral de Gestión Documental</Text>
         <Text style={styles.subtitle}>Consulta y aporta tus documentos desde un espacio personal protegido.</Text>
         <View style={styles.authTabs}>
           <Pressable style={[styles.authTab, authMode === 'login' && styles.authTabActive]} onPress={() => setAuthMode('login')}>
@@ -676,8 +685,11 @@ function MobileApp() {
   return <SafeAreaView edges={['top', 'right', 'left']} style={styles.authenticatedSafe}>
     <StatusBar style="light" />
     <View style={[styles.header, { paddingHorizontal: horizontalPadding }, isCompact && styles.headerCompact]}>
+      <View style={[styles.headerLogoFrame, isCompact && styles.headerLogoFrameCompact]}>
+        <Image source={SYSTEM_LOGO} style={styles.headerLogo} resizeMode="contain" accessibilityIgnoresInvertColors />
+      </View>
       <View style={styles.headerIdentity}>
-        <Text style={styles.headerEyebrow}>EXPEDIENTE ÍNTEGRO</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.headerEyebrow}>SISTEMA INTEGRAL DE GESTIÓN DOCUMENTAL</Text>
         <Text style={[styles.headerTitle, isCompact && styles.headerTitleCompact]}>{copy.heading}</Text>
         <Text style={styles.headerSub}>{profile.fullName} · {copy.label}</Text>
       </View>
@@ -1154,8 +1166,9 @@ const styles = StyleSheet.create({
   loginSafe: { flex: 1, backgroundColor: theme.colors.background },
   login: { flexGrow: 1, justifyContent: 'center', width: '100%', maxWidth: 600, alignSelf: 'center', paddingVertical: 28, gap: 13, backgroundColor: theme.colors.background },
   loginTablet: { paddingVertical: 42 },
-  brandMark: { width: 58, height: 58, borderRadius: 18, backgroundColor: theme.colors.navy, alignItems: 'center', justifyContent: 'center' },
-  brandInitials: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  loginLogoFrame: { width: 142, height: 132, padding: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.navyText, shadowOpacity: 0.08, shadowRadius: 12, elevation: 2 },
+  loginLogoFrameCompact: { width: 118, height: 110, borderRadius: 15 },
+  loginLogo: { width: '100%', height: '100%' },
   loginBadge: { alignSelf: 'flex-start', backgroundColor: theme.colors.tealSoft, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5 },
   loginBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: theme.colors.teal },
   title: { fontSize: 30, fontWeight: '800', color: theme.colors.navyText },
@@ -1183,6 +1196,9 @@ const styles = StyleSheet.create({
   notice: { backgroundColor: '#fef3c7', color: theme.colors.warningText, padding: 12, borderRadius: 9, lineHeight: 20 },
   header: { backgroundColor: theme.colors.navy, paddingVertical: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerCompact: { paddingVertical: 15 },
+  headerLogoFrame: { width: 54, height: 52, marginRight: 11, padding: 4, flexShrink: 0, backgroundColor: '#fff', borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  headerLogoFrameCompact: { width: 46, height: 44, marginRight: 8, borderRadius: 11 },
+  headerLogo: { width: '100%', height: '100%' },
   headerIdentity: { flex: 1, paddingRight: 10 },
   headerEyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.1, color: '#8eddd0' },
   headerTitle: { fontSize: 23, fontWeight: '800', color: '#fff', marginTop: 2 },

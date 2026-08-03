@@ -181,6 +181,32 @@ class WorkspaceWebTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    @patch("app.call_api")
+    def test_administration_hides_configuration_and_system_health(self, call_api_mock):
+        call_api_mock.return_value = {
+            "overview": {
+                "user_count": 23,
+                "active_user_count": 22,
+                "role_count": 12,
+                "active_document_type_count": 18,
+            }
+        }
+        self.set_session("admin", permissions=("workspace.administration.access",))
+
+        response = self.client.get("/workspaces/administration")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Usuarios registrados".encode(), response.data)
+        self.assertIn("Roles disponibles".encode(), response.data)
+        self.assertIn("Tipos documentales".encode(), response.data)
+        self.assertNotIn(b"/workspaces/administration/configuration", response.data)
+        self.assertNotIn(b"/workspaces/administration/health", response.data)
+        self.assertNotIn("Salud del sistema".encode(), response.data)
+        call_api_mock.assert_called_once_with(self.app, "GET", "administration/overview")
+
+        self.assertEqual(self.client.get("/workspaces/administration/configuration").status_code, 404)
+        self.assertEqual(self.client.get("/workspaces/administration/health").status_code, 404)
+
     def test_mobile_role_has_no_web_workspace(self):
         self.set_session("party")
 
@@ -603,6 +629,11 @@ class WorkspaceWebTest(unittest.TestCase):
         self.assertIn("Todo el expediente".encode(), response.data)
         self.assertIn("Versiones inmutables".encode(), response.data)
         self.assertIn("Conservaci\u00f3n permanente".encode(), response.data)
+        self.assertIn(b'/static/logo.png', response.data)
+        self.assertIn("Logotipo del Sistema Integral de Gestión Documental".encode(), response.data)
+        self.assertIn("SISTEMA INTEGRAL DE".encode(), response.data)
+        self.assertIn("GESTIÓN DOCUMENTAL".encode(), response.data)
+        self.assertNotIn("Expediente Íntegro".encode(), response.data)
         self.assertIn(b'/static/filters.js', response.data)
 
     def test_duplicate_workspace_sections_redirect_to_canonical_view(self):
@@ -634,6 +665,8 @@ class WorkspaceWebTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("+ Agregar documento".encode(), response.data)
         self.assertIn(b'class="creation-disclosure"', response.data)
+        self.assertIn(b'accept=".pdf,.jpg,.jpeg,.png"', response.data)
+        self.assertNotIn(b".docx", response.data)
 
     @patch("app.call_api")
     def test_process_case_detail_renders_assignments_stages_and_deadlines(self, call_api_mock):
@@ -874,6 +907,8 @@ class WorkspaceWebTest(unittest.TestCase):
         self.assertIn("Roles activos".encode(), response.data)
         self.assertIn("Crear expedientes.".encode(), response.data)
         self.assertIn("Vista técnica de identidad".encode(), response.data)
+        self.assertNotIn("Membresías organizativas".encode(), response.data)
+        self.assertNotIn("Sin unidad asignada".encode(), response.data)
         self.assertNotIn("contacta a soporte".encode(), response.data)
         call_api_mock.assert_called_once_with(self.app, "GET", "administration/users/9")
 

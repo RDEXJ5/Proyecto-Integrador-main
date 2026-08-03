@@ -1,4 +1,4 @@
-# WEB Flask de Expediente Íntegro
+# WEB Flask del Sistema Integral de Gestión Documental
 
 Cliente web del sistema general de gestión documental jurídica. La aplicación no
 se conecta directamente a MySQL ni a MinIO: todas las operaciones pasan por la
@@ -12,7 +12,7 @@ API, que debe validar JWT, permisos, asignación y acceso al recurso.
 | `/workspaces/review` | Juez y notario | Revisión, decisiones, autorizaciones, certificaciones y firmas. |
 | `/workspaces/process` | Secretario y coordinador | Gestión de expedientes, asignaciones, etapas y plazos. |
 | `/workspaces/audit` | Auditor | Consulta histórica de solo lectura. |
-| `/workspaces/administration` | Administrador TI | Identidades, permisos, catálogos y salud. |
+| `/workspaces/administration` | Administrador TI | Identidades, permisos y catálogos. |
 
 Un usuario con más de un perfil puede cambiar entre los espacios que le
 correspondan. Las rutas originales de juez, notario y abogado redirigen al nuevo
@@ -24,6 +24,11 @@ perfil** permanece visible en el menú de cada espacio y presenta los roles,
 espacios y funciones autorizadas con nombres comprensibles, además de explicar
 la protección de la sesión. Los iconos del menú y de las acciones principales
 son recursos SVG internos y no dependen de servicios externos.
+
+El logotipo institucional se sirve localmente desde `static/logo.png` y aparece
+en el encabezado compartido y en la presentación del inicio de sesión. El
+espacio administrativo no expone apartados de configuración ni salud del
+sistema; su navegación se limita a usuarios, roles, permisos y catálogos.
 
 Desde **Mi perfil**, cada persona puede actualizar únicamente su nombre visible.
 El correo electrónico, los roles, los permisos y el estado de la cuenta quedan
@@ -64,8 +69,8 @@ consultas existentes de expedientes, documentos y versiones.
   la página, sin usar el visor nativo ni una CDN en tiempo de ejecución.
 - `document.content.read.web` habilita la vista previa; el botón de descarga
   solamente se crea para sesiones con `document.download.web`.
-- Los DOCX necesitan una conversión posterior a PDF y nunca se abren como una
-  descarga accidental desde el control de vista previa.
+- La carga documental se limita a PDF, JPG y PNG, que son los formatos admitidos
+  por la validación de contenido y la vista previa protegida.
 
 ## Flujo
 

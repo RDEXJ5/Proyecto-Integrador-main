@@ -1,4 +1,4 @@
-# Aplicación móvil · Expediente Íntegro
+# Aplicación móvil · Sistema Integral de Gestión Documental
 
 Aplicación Expo 54 exclusiva para partes interesadas (`party`) y testigos
 (`witness`). Consume la API móvil en el puerto 3001; no utiliza la API Key de
@@ -13,6 +13,8 @@ sistema ni llama las rutas profesionales de la API web.
 - Navegación inferior entre Inicio, Expedientes o Casos, Pendientes y Perfil.
 - Menú con iconos y etiquetas que respeta la barra superior, la isla dinámica y
   los controles inferiores del dispositivo mediante áreas seguras nativas.
+- Logotipo institucional local en el acceso y en el encabezado de todas las
+  pantallas autenticadas.
 - Bandeja de pendientes que reúne invitaciones y documentos con observaciones.
 - Invitaciones con aceptación o rechazo explícito.
 - Expedientes en los que la persona participa activamente, con búsqueda y
@@ -95,7 +97,7 @@ secretos JWT.
 
 ## Tipos y archivos
 
-La API admite PDF, JPG, PNG y DOCX válidos de hasta 25 MB. El tipo no se confía
+La API admite PDF, JPG y PNG válidos de hasta 25 MB. El tipo no se confía
 al nombre del archivo: el servidor inspecciona sus bytes. La cámara genera un
 origen `mobile_camera`; el selector genera `mobile_file`.
 

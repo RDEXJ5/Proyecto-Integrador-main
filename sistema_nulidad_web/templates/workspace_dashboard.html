@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block title %}{{ workspace.label }} - Expediente Íntegro{% endblock %}
+{% block title %}{{ workspace.label }} - Sistema Integral de Gestión Documental{% endblock %}
 {% block content %}
   <section class="workspace-hero workspace-hero-{{ workspace.code }}">
     <div>
@@ -70,8 +70,8 @@
     <section class="workspace-primary">
       <div class="section-heading section-heading-top">
         <div>
-          <h2>{% if workspace.code in ['review', 'contribution', 'process'] %}Atención prioritaria{% elif workspace.code == 'audit' %}Actividad auditable{% else %}Estado de la plataforma{% endif %}</h2>
-          <p>{% if workspace.code in ['review', 'contribution', 'process'] %}Los asuntos activos y con pendientes aparecen primero.{% else %}La información visible depende del alcance de tu cuenta.{% endif %}</p>
+          <h2>{% if workspace.code in ['review', 'contribution', 'process'] %}Atención prioritaria{% elif workspace.code == 'audit' %}Actividad auditable{% else %}Gestión administrativa{% endif %}</h2>
+          <p>{% if workspace.code in ['review', 'contribution', 'process'] %}Los asuntos activos y con pendientes aparecen primero.{% elif workspace.code == 'administration' %}Administra identidades, roles y catálogos desde un único espacio.{% else %}La información visible depende del alcance de tu cuenta.{% endif %}</p>
         </div>
         {% if cases %}<span class="count-badge">{{ cases|length }} visibles</span>{% endif %}
       </div>
@@ -101,14 +101,11 @@
         </div>
       {% elif workspace.code == 'audit' and module_data.events %}
         <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Elemento afectado</th></tr></thead><tbody>{% for event in module_data.events[:10] %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor_name or 'Sistema' }}</td><td>{{ event.action_code|ui_label('audit_action') }}</td><td>{{ event.resource_type|ui_label('resource') }} número {{ event.resource_id }}</td></tr>{% endfor %}</tbody></table></div>
-      {% elif workspace.code == 'administration' and health_status %}
-        <article class="system-health-card">
-          <div>
-            <span class="health-dot{% if health_status.available %} is-healthy{% endif %}" aria-hidden="true"></span>
-            <div><strong>Servicio de la aplicación: {{ health_status.api|ui_label('status') }}</strong><small>Base de datos: {{ health_status.database|ui_label('status') }}</small></div>
-          </div>
-          <a class="button button-outline" href="{{ url_for('workspace_section', workspace_code=workspace.code, section_code='health') }}">{{ icon('health') }}<span>Ver salud</span></a>
-        </article>
+      {% elif workspace.code == 'administration' %}
+        <div class="info-card administration-dashboard-note">
+          <strong>Herramientas administrativas disponibles</strong>
+          <p>Gestiona cuentas y permisos con trazabilidad, y mantén actualizado el catálogo documental sin exponer información técnica del sistema.</p>
+        </div>
       {% else %}
         <div class="empty-state compact-empty">
           <h3>Sin información disponible</h3>

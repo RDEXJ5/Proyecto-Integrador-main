@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Expediente Íntegro",
+    "name": "Sistema Integral de Gestión Documental",
     "slug": "expediente-integro-mobile",
     "version": "1.0.0",
     "orientation": "default",
@@ -11,8 +11,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Expediente Íntegro necesita acceso para seleccionar documentos personales.",
-          "cameraPermission": "Expediente Íntegro necesita la cámara para capturar documentos personales.",
+          "photosPermission": "El Sistema Integral de Gestión Documental necesita acceso para seleccionar documentos personales.",
+          "cameraPermission": "El Sistema Integral de Gestión Documental necesita la cámara para capturar documentos personales.",
           "microphonePermission": false
         }
       ]

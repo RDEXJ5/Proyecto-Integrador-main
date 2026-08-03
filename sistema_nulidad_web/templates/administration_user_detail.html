@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block title %}Perfil de usuario - Expediente Íntegro{% endblock %}
+{% block title %}Perfil de usuario - Sistema Integral de Gestión Documental{% endblock %}
 {% block content %}
   <a class="back-link" href="{{ url_for('workspace_section', workspace_code='administration', section_code='users') }}">Volver al registro de usuarios</a>
 
@@ -28,7 +28,7 @@
     {{ icon('shield') }}
     <div>
       <strong>Vista técnica de identidad</strong>
-      <p>Esta ficha muestra configuración de la cuenta, roles, permisos y membresías. No expone contraseñas, documentos ni contenido jurídico.</p>
+      <p>Esta ficha muestra la configuración de la cuenta, sus roles y permisos. No expone contraseñas, documentos ni contenido jurídico.</p>
     </div>
   </section>
 
@@ -45,8 +45,7 @@
     </section>
   </details>
 
-  <div class="profile-grid administration-detail-grid">
-    <section class="profile-panel">
+  <section class="profile-panel">
       <div class="section-heading section-heading-top">
         <div><h2>Roles activos</h2><p>Funciones vigentes y medio desde el que puede ingresar la persona.</p></div>
         <span class="count-badge">{{ active_roles|length }} activos</span>
@@ -65,28 +64,7 @@
       {% else %}
         <div class="empty-state compact-empty"><h3>Sin roles activos</h3><p>La cuenta no puede acceder a un espacio hasta recibir un rol.</p></div>
       {% endif %}
-    </section>
-
-    <section class="profile-panel">
-      <div class="section-heading section-heading-top">
-        <div><h2>Membresías organizativas</h2><p>Unidades en las que participa la cuenta y estado de cada vínculo.</p></div>
-        <span class="count-badge">{{ unit_memberships|length }} registros</span>
-      </div>
-      {% if unit_memberships %}
-        <div class="administration-role-list">
-          {% for membership in unit_memberships %}
-            <article>
-              <div><strong>{{ membership.unit_name }}</strong><span class="status status-{{ membership.membership_status }}">{{ membership.membership_status|ui_label('status') }}</span></div>
-              <p>{{ membership.unit_type|ui_label('unit_type') }} - {{ membership.membership_type|ui_label('membership') }}</p>
-              <small>{{ membership.membership_reason }}</small>
-            </article>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty-state compact-empty"><h3>Sin unidad asignada</h3><p>Este perfil no tiene una membresía organizativa registrada.</p></div>
-      {% endif %}
-    </section>
-  </div>
+  </section>
 
   <section class="profile-panel permissions-panel">
     <div class="section-heading section-heading-top">

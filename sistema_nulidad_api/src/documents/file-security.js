@@ -8,8 +8,7 @@ const envelopeMagic = Buffer.from('EDOC1');
 const allowedTypes = new Map([
   ['application/pdf', 'pdf'],
   ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx']
+  ['image/png', 'png']
 ]);
 
 export async function validateDocumentFile(file) {
@@ -18,7 +17,7 @@ export async function validateDocumentFile(file) {
   }
   const detected = await fileTypeFromBuffer(file.buffer);
   if (!detected || !allowedTypes.has(detected.mime)) {
-    throw new ApiError(415, 'unsupported_document_type', 'Sólo se aceptan archivos PDF, JPG, PNG o DOCX válidos.');
+    throw new ApiError(415, 'unsupported_document_type', 'Sólo se aceptan archivos PDF, JPG o PNG válidos.');
   }
   return {
     buffer: file.buffer,

@@ -6,8 +6,7 @@ export async function selectDocumentFile() {
     type: [
       'application/pdf',
       'image/jpeg',
-      'image/png',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'image/png'
     ],
     copyToCacheDirectory: true,
     multiple: false
