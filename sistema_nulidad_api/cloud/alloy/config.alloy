@@ -1,0 +1,58 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = sys.env("MONITORED_COMPOSE_PROJECT")
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    replacement  = "publico"
+    target_label = "servidor"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.safe_logs.receiver]
+}
+
+loki.process "safe_logs" {
+  stage.drop {
+    expression          = "(?i)(jwt_secret|api_application_key|authorization: bearer|mysql_pwd|password=|secret=|token=|contraseña=)"
+    drop_counter_reason = "possible_secret"
+  }
+
+  forward_to = [loki.write.private.receiver]
+}
+
+loki.write "private" {
+  endpoint {
+    url = "http://private.internal:3100/loki/api/v1/push"
+  }
+}
+

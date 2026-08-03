@@ -12,6 +12,7 @@ import mobileCasesRouter from './mobile/cases.js';
 import mobileDocumentsRouter from './mobile/documents.js';
 import mobileInvitationsRouter from './mobile/invitations.js';
 import { assertStorageReady } from './storage/minio.js';
+import { createHttpMetrics } from './observability/metrics.js';
 
 export function createMobileApp() {
   const app = express();
@@ -26,10 +27,14 @@ export function createMobileApp() {
     methods: ['GET', 'POST', 'PATCH'],
     allowedHeaders: ['Authorization', 'Content-Type']
   }));
+  const metrics = createHttpMetrics('api-movil');
+  app.use(metrics.middleware);
+  app.get('/metrics', metrics.handler);
   app.use(express.json({ limit: '1mb', strict: true }));
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 200,
+    skip: (request) => request.path === '/health' || request.path === '/metrics',
     standardHeaders: true,
     legacyHeaders: false,
     ipv6Subnet: 56

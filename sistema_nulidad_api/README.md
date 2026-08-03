@@ -1,4 +1,4 @@
-# APIs · Expediente Íntegro
+# APIs · Sistema Integral de Gestión Documental 2.0
 
 El mismo proyecto Node.js produce dos servicios HTTP independientes que
 comparten los servicios de dominio, MySQL y MinIO:
@@ -29,13 +29,14 @@ Invoke-RestMethod http://127.0.0.1:3001/health
 Invoke-RestMethod http://127.0.0.1:5000/login
 ```
 
-Las migraciones `012_mobile_api_channel.sql` y
-`013_mobile_registration_invitations.sql` se ejecutan de forma idempotente tanto
+Las migraciones `012_mobile_api_channel.sql`,
+`013_mobile_registration_invitations.sql` y `015_workspace_accounts.sql` se ejecutan de forma idempotente tanto
 en bases nuevas como en un volumen existente. No es necesario eliminar el
 volumen para habilitar la API móvil, el registro o las invitaciones.
 
-Para cargar cuentas y expedientes de demostración con contraseña `2318`, use el
-perfil opcional después de levantar el stack:
+Para cargar las cuentas y expedientes de demostración, use el perfil opcional
+después de levantar el stack. Las cuatro cuentas web operativas usan la
+contraseña `12345678`; las cuentas móviles conservan `2318`:
 
 ```powershell
 docker compose --profile demo run --rm demo-seed
@@ -43,6 +44,39 @@ docker compose --profile demo run --rm demo-seed
 
 El perfil `demo` nunca se ejecuta automáticamente y no debe utilizarse en
 producción.
+
+## Monitoreo integral
+
+El monitoreo se agrega mediante un archivo Compose complementario; no sustituye
+el stack principal:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up --build -d
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml ps -a
+```
+
+Accesos recomendados:
+
+- Sistema mediante HAProxy: `https://localhost:8443/login`.
+- API web: `https://localhost:8443/api/health`.
+- API móvil: `https://localhost:8443/mobile-api/health`.
+- Grafana: `https://localhost:8443/grafana/`.
+
+Grafana usa `admin` / `2318` únicamente en desarrollo. El certificado local es
+autofirmado. Prometheus y Loki permanecen internos; Grafana incluye un tablero
+aprovisionado para disponibilidad, solicitudes, latencia, errores, MySQL,
+contenedores, alertas y logs.
+
+La arquitectura, las alertas, los comandos de diagnóstico y las medidas para
+producción están documentados en
+[`docs/MONITOREO.md`](../docs/MONITOREO.md).
+
+## Despliegue dividido en Google Cloud
+
+La configuración para mantener la aplicación móvil local y publicar solamente
+la web mediante dos servidores se encuentra en
+[`cloud/README.md`](cloud/README.md). Los archivos cloud son adicionales: no
+reemplazan el Compose local ni eliminan `mobile-api`.
 
 ## API web
 

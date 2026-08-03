@@ -4,7 +4,7 @@ export const openapiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'API del Sistema Integral de Expedientes',
-    version: '1.2.0',
+    version: '2.0.0',
     description: 'API general para expedientes jurídicos. Autoriza cada recurso para prevenir BOLA/IDOR y conserva versiones documentales en almacenamiento privado.'
   },
   servers: [{ url: '/', description: 'Servidor actual' }],

@@ -25,6 +25,7 @@ from flask import (
 from flask_session import Session
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import CSRFError
+from prometheus_flask_exporter import PrometheusMetrics
 
 
 ROLE_LABELS = {
@@ -593,6 +594,12 @@ WORKSPACE_GUIDES: dict[str, tuple[str, ...]] = {
 
 csrf = CSRFProtect()
 server_session = Session()
+web_metrics = PrometheusMetrics.for_app_factory(
+    group_by="endpoint",
+    defaults_prefix="gdi_web",
+    default_labels={"service": "web"},
+    excluded_paths="/metrics",
+)
 
 
 class ApiClientError(Exception):
@@ -750,6 +757,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     csrf.init_app(app)
     server_session.init_app(app)
+    web_metrics.init_app(app)
     app.jinja_env.filters["ui_label"] = ui_label
     app.jinja_env.filters["display_text"] = repair_display_text
     app.jinja_env.filters["file_size"] = format_file_size

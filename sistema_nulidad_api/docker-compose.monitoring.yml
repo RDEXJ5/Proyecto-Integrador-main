@@ -1,0 +1,265 @@
+services:
+  minio:
+    environment:
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    networks:
+      - monitoring
+
+  api:
+    networks:
+      - monitoring
+
+  mobile-api:
+    networks:
+      - monitoring
+
+  web:
+    networks:
+      - monitoring
+
+  mysql-exporter-init:
+    image: mysql:8.4.11
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD:-2318}
+    volumes:
+      - mysql_exporter_config:/cfg
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mysql --host=db --user=root --execute="CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '$$MYSQL_EXPORTER_PASSWORD'; ALTER USER 'exporter'@'%' IDENTIFIED BY '$$MYSQL_EXPORTER_PASSWORD'; GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%'; FLUSH PRIVILEGES;"
+        umask 077
+        chmod 0600 /cfg/.my.cnf 2>/dev/null || true
+        printf '[client]\nuser=exporter\npassword=%s\nhost=db\nport=3306\n' "$$MYSQL_EXPORTER_PASSWORD" > /cfg/.my.cnf
+        chmod 0444 /cfg/.my.cnf
+    networks:
+      - private
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.19.0
+    restart: unless-stopped
+    depends_on:
+      mysql-exporter-init:
+        condition: service_completed_successfully
+    command:
+      - --config.my-cnf=/cfg/.my.cnf
+      - --collect.info_schema.innodb_metrics
+    volumes:
+      - mysql_exporter_config:/cfg:ro
+    networks:
+      - private
+      - monitoring
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.57.0
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --disable_metrics=disk
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks:
+      - monitoring
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - monitoring
+      - edge
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alert-receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "src/observability/alert-receiver.js"]
+    restart: unless-stopped
+    environment:
+      PORT: 9094
+    networks:
+      - monitoring
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alertmanager:
+    image: prom/alertmanager:v0.32.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --enable-feature=utf8-strict-mode
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      - alert-receiver
+    networks:
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v3.13.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - ./monitoring/prometheus/file_sd:/etc/prometheus/file_sd:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - alertmanager
+      - blackbox-exporter
+      - mysql-exporter
+      - cadvisor
+    networks:
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  loki:
+    image: grafana/loki:3.7.4
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    restart: unless-stopped
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      MONITORED_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-sistema_nulidad_api}
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-2318}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://localhost:8443/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring
+      - edge
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  haproxy:
+    build:
+      context: ./monitoring/haproxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${HAPROXY_BIND_ADDRESS:-127.0.0.1}:${HAPROXY_HTTP_PORT:-8088}:80"
+      - "${HAPROXY_BIND_ADDRESS:-127.0.0.1}:${HAPROXY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - haproxy_certs:/certs
+    depends_on:
+      api:
+        condition: service_healthy
+      mobile-api:
+        condition: service_healthy
+      web:
+        condition: service_started
+      grafana:
+        condition: service_started
+    networks:
+      - edge
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mysql_exporter_config:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+  loki_data:
+  alloy_data:
+  haproxy_certs:
+
+networks:
+  monitoring:
+    internal: true

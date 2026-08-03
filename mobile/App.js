@@ -839,6 +839,7 @@ function MobileApp() {
           <Text style={styles.profileName}>{profile.fullName}</Text>
           <Text selectable style={styles.profileEmail}>{profile.email}</Text>
           <View style={styles.profileRole}><Text style={styles.profileRoleText}>{copy.label}</Text></View>
+          <Text style={styles.profileVersion}>Sistema versión 2.0</Text>
         </View>
 
         <View style={styles.securityCard}>
@@ -1330,6 +1331,7 @@ const styles = StyleSheet.create({
   profileEmail: { color: '#d5e4ef', textAlign: 'center', marginTop: 4 },
   profileRole: { backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: 99, paddingHorizontal: 11, paddingVertical: 6, marginTop: 12 },
   profileRoleText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  profileVersion: { color: '#a9c2d3', fontSize: 12, fontWeight: '700', marginTop: 10 },
   securityCard: { padding: 17, backgroundColor: '#fff', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 14, marginBottom: 12 },
   securityTitle: { color: theme.colors.navyText, fontSize: 19, fontWeight: '900', marginTop: 4, marginBottom: 7 },
   securityFact: { paddingVertical: 11, borderTopWidth: 1, borderTopColor: theme.colors.border, flexDirection: 'row', gap: 10 },

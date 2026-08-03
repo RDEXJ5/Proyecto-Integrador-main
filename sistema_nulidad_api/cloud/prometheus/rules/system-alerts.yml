@@ -1,0 +1,162 @@
+groups:
+  - name: disponibilidad-cloud
+    rules:
+      - alert: ServicioNoDisponible
+        expr: up{job=~"api-web|web|mysql|minio|haproxy|grafana"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "El servicio {{ $labels.job }} no responde"
+          description: "Prometheus no pudo recopilar métricas de {{ $labels.instance }} durante dos minutos."
+
+      - alert: ServidorNoDisponible
+        expr: up{job=~"host-publico|host-privado"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "El servidor {{ $labels.job }} no responde"
+          description: "No se reciben métricas del sistema operativo."
+
+      - alert: ComprobacionHTTPFallida
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "Falló la comprobación HTTP de {{ $labels.instance }}"
+          description: "La sonda no pudo completar una respuesta HTTP válida."
+
+      - alert: CertificadoProximoAVencer
+        expr: probe_ssl_earliest_cert_expiry - time() < 14 * 24 * 60 * 60
+        for: 15m
+        labels:
+          severity: warning
+          service: haproxy
+        annotations:
+          summary: "El certificado TLS vence en menos de catorce días"
+          description: "Renueve el certificado utilizado por HAProxy."
+
+  - name: rendimiento-aplicacion-cloud
+    rules:
+      - alert: TasaAltaDeErroresHTTP
+        expr: |
+          (
+            sum by (service) (rate(gdi_http_requests_total{route!="/health",status_class="5xx"}[5m]))
+            /
+            clamp_min(sum by (service) (rate(gdi_http_requests_total{route!="/health"}[5m])), 0.01)
+          ) > 0.05
+          or
+          (
+            sum by (service) (rate(gdi_web_http_request_duration_seconds_count{endpoint!="health",status=~"5.."}[5m]))
+            /
+            clamp_min(sum by (service) (rate(gdi_web_http_request_duration_seconds_count{endpoint!="health"}[5m])), 0.01)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Más del 5 % de errores HTTP en {{ $labels.service }}"
+          description: "Revise los registros del servicio y la disponibilidad de MySQL y MinIO."
+
+      - alert: LatenciaHTTPAlta
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(gdi_http_request_duration_seconds_bucket{route!="/health"}[5m]))
+          ) > 2
+          or
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(gdi_web_http_request_duration_seconds_bucket{endpoint!="health"}[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia elevada en {{ $labels.service }}"
+          description: "El percentil 95 supera los dos segundos durante cinco minutos."
+
+      - alert: MuchosIntentosDeLoginFallidos
+        expr: sum(rate(gdi_http_requests_total{route="/auth/login",status_class=~"4xx|5xx"}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: autenticacion
+        annotations:
+          summary: "Aumento de inicios de sesión fallidos"
+          description: "Compruebe errores de configuración o intentos automatizados."
+
+  - name: infraestructura-cloud
+    rules:
+      - alert: MySQLConexionesAltas
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "MySQL utiliza más del 80 % de sus conexiones"
+          description: "Revise el pool de conexiones y las consultas activas."
+
+      - alert: MinIOEspacioAlto
+        expr: |
+          1 - (
+            minio_cluster_capacity_usable_free_bytes
+            /
+            clamp_min(minio_cluster_capacity_usable_total_bytes, 1)
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: minio
+        annotations:
+          summary: "MinIO utiliza más del 85 % del almacenamiento"
+          description: "Revise la capacidad disponible antes de afectar las cargas documentales."
+
+      - alert: ServidorConPocoEspacio
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            /
+            clamp_min(node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}, 1)
+          ) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          service: almacenamiento
+        annotations:
+          summary: "El servidor conserva menos del 15 % de espacio libre"
+          description: "Revise el sistema de archivos {{ $labels.mountpoint }} en {{ $labels.instance }}."
+
+      - alert: ContenedorConMemoriaAlta
+        expr: |
+          (
+            container_memory_working_set_bytes{image!=""}
+            /
+            clamp_min(container_spec_memory_limit_bytes{image!=""}, 1)
+          ) > 0.90
+          and container_spec_memory_limit_bytes{image!=""} > 0
+          and container_spec_memory_limit_bytes{image!=""} < 9e18
+        for: 10m
+        labels:
+          severity: warning
+          service: contenedores
+        annotations:
+          summary: "Contenedor por encima del 90 % de memoria"
+          description: "El contenedor {{ $labels.name }} está cerca de su límite de memoria."
+
+      - alert: ErrorEvaluandoReglasPrometheus
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: prometheus
+        annotations:
+          summary: "Prometheus no pudo evaluar una regla"
+          description: "Revise la sintaxis y los nombres de métricas."
+

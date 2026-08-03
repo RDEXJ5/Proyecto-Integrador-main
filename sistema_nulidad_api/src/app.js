@@ -19,6 +19,7 @@ import { authenticate } from './security/auth.js';
 import { requireChannel } from './security/channel.js';
 import { openapiDocument } from './openapi.js';
 import { assertStorageReady } from './storage/minio.js';
+import { createHttpMetrics } from './observability/metrics.js';
 
 export function createApp() {
   const app = express();
@@ -33,10 +34,14 @@ export function createApp() {
     methods: ['GET', 'POST', 'PATCH'],
     allowedHeaders: ['Authorization', 'Content-Type', 'X-API-Key']
   }));
+  const metrics = createHttpMetrics('api-web');
+  app.use(metrics.middleware);
+  app.get('/metrics', metrics.handler);
   app.use(express.json({ limit: '1mb', strict: true }));
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 300,
+    skip: (request) => request.path === '/health' || request.path === '/metrics',
     standardHeaders: true,
     legacyHeaders: false,
     ipv6Subnet: 56

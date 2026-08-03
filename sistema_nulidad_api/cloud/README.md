@@ -1,0 +1,223 @@
+# Despliegue dividido en Google Cloud
+
+Esta configuración publica exclusivamente la versión web y conserva la
+aplicación móvil en el entorno local. No reemplaza los archivos
+`docker-compose.yml` y `docker-compose.monitoring.yml` existentes.
+
+## Arquitectura
+
+| Servidor | Servicios principales | Exposición |
+|---|---|---|
+| Público `gdi-edge` | HAProxy y Grafana | Internet: `80` y `443`. VPC: métricas de Grafana, HAProxy, cAdvisor y Node Exporter. |
+| Privado `gdi-private` | Flask, API web, MySQL, MinIO, Prometheus, Loki, Alertmanager y exportadores | Sin IP pública. Web, API, Prometheus y Loki escuchan únicamente en la IP interna reservada. |
+
+Alloy y los exportadores del servidor público son agentes auxiliares. No
+atienden usuarios y solo envían registros y métricas al servidor privado.
+
+La API móvil no se despliega en Google Cloud y HAProxy no publica una ruta
+`/mobile-api`. El entorno local continúa usando los archivos Compose originales.
+
+## Archivos
+
+- `docker-compose.private.yml`: servidor privado.
+- `docker-compose.edge.yml`: servidor público.
+- `private.env.example` y `private.storage.env.example`: variables privadas.
+- `edge.env.example`: variables del borde público.
+- `haproxy/`: proxy HTTPS que exige un certificado real.
+- `prometheus/`: objetivos y alertas adaptados a dos servidores, sin exigir la API móvil.
+- `grafana/`: orígenes privados de Prometheus y Loki.
+- `alloy/`: recolección de registros del servidor público.
+
+## Requisitos previos
+
+1. Proyecto de Google Cloud con facturación habilitada.
+2. Una región y zona elegidas para ambos servidores.
+3. VPC y subred propias; no usar reglas abiertas de la red predeterminada.
+4. IP externa estática para el servidor público.
+5. IP interna reservada para cada servidor.
+6. Dominio dirigido a la IP externa del servidor público.
+7. Docker Engine y el complemento Docker Compose instalados en ambas VM.
+8. Certificado TLS emitido para el dominio.
+9. Secretos de producción independientes guardados en Secret Manager.
+
+## Reglas mínimas de red
+
+Use cuentas de servicio o etiquetas distintas, por ejemplo `gdi-edge` y
+`gdi-private`.
+
+| Destino | Origen permitido | Puertos TCP | Motivo |
+|---|---|---|---|
+| Público | Internet | `80`, `443` | Redirección HTTPS y sistema web. |
+| Privado | Público | `3000`, `5000` | API web y Flask mediante HAProxy. |
+| Privado | Público | `9090`, `3100` | Consultas de Grafana y envío de logs de Alloy. |
+| Público | Privado | `3000`, `8080`, `8405`, `9100` | Métricas de Grafana, contenedores, HAProxy y host. |
+| Ambos | Rango IAP `35.235.240.0/20` | `22` | Administración SSH mediante IAP. |
+
+No abra a Internet `3000`, `5000`, `9090`, `3100`, `3306`, `9000`, `9001`,
+`8080`, `8405` ni `9100`. MySQL y MinIO no se publican ni siquiera en la VPC;
+solo sus contenedores autorizados pueden alcanzarlos.
+
+El servidor privado puede obtener salida para descargar imágenes mediante Cloud
+NAT. Cloud NAT no permite conexiones entrantes iniciadas desde Internet.
+
+## Secretos
+
+No reutilice `2318`, `12345678` ni los secretos del entorno local. Cree valores
+independientes para:
+
+- usuarios root y de aplicación de MySQL;
+- usuario de métricas de MySQL;
+- JWT, API interna, firma de plataforma y sesión Flask;
+- usuarios root y de aplicación de MinIO;
+- cifrado documental;
+- administración y firma interna de Grafana.
+
+Cada VM debe usar una cuenta de servicio con acceso únicamente a las versiones
+de Secret Manager que necesita. Descargue los valores durante el despliegue y
+cree los archivos `private.env`, `private.storage.env` y `edge.env` con permisos
+`0600`. No los copie al repositorio ni a una imagen Docker.
+
+Para generar una clave de cifrado documental de 32 bytes en Linux:
+
+```bash
+openssl rand -base64 32
+```
+
+Para secretos textuales:
+
+```bash
+openssl rand -base64 48
+```
+
+## Certificado de HAProxy
+
+`TLS_CERT_FILE` debe apuntar a un PEM legible únicamente por el administrador.
+El archivo debe contener primero la clave privada y después la cadena completa
+del certificado:
+
+```bash
+install -d -m 0700 secrets
+sh -c 'cat /ruta/privkey.pem /ruta/fullchain.pem > secrets/server.pem'
+chmod 0600 secrets/server.pem
+```
+
+El contenedor cloud se detiene si el certificado no existe. No genera un
+certificado autofirmado ni sustituye silenciosamente el certificado real.
+Automatice la renovación y reinicie o recargue HAProxy después de renovarlo.
+
+## Preparar el servidor privado
+
+Copie el repositorio al servidor privado y ejecute desde
+`sistema_nulidad_api/cloud`:
+
+```bash
+cp private.env.example private.env
+cp private.storage.env.example private.storage.env
+chmod 0600 private.env private.storage.env
+```
+
+Sustituya todos los valores y establezca:
+
+- `PRIVATE_BIND_ADDRESS`: IP interna reservada del servidor privado.
+- `EDGE_PRIVATE_IP`: IP interna reservada del servidor público.
+- `CORS_ORIGINS`: dominio HTTPS definitivo.
+
+Valide y arranque:
+
+```bash
+docker compose --env-file private.env -f docker-compose.private.yml config --quiet
+docker compose --env-file private.env -f docker-compose.private.yml up --build -d
+docker compose --env-file private.env -f docker-compose.private.yml ps -a
+```
+
+No utilice el perfil de datos de demostración en producción. En una instalación
+nueva, cree la primera cuenta administradora mediante el procedimiento de
+bootstrap protegido. Para trasladar datos existentes se requiere un respaldo
+consistente de MySQL y una copia verificable de los objetos de MinIO; no copie
+los directorios de los volúmenes mientras los servicios están escribiendo.
+
+## Preparar el servidor público
+
+Copie el repositorio al servidor público y ejecute desde
+`sistema_nulidad_api/cloud`:
+
+```bash
+cp edge.env.example edge.env
+chmod 0600 edge.env
+```
+
+Configure el dominio, ambas IP internas, las credenciales de Grafana y la ruta
+del certificado. Después valide y arranque:
+
+```bash
+docker compose --env-file edge.env -f docker-compose.edge.yml config --quiet
+docker compose --env-file edge.env -f docker-compose.edge.yml up --build -d
+docker compose --env-file edge.env -f docker-compose.edge.yml ps -a
+```
+
+## Comprobaciones
+
+Desde el servidor público:
+
+```bash
+curl --fail http://PRIVATE_IP:3000/health
+curl --fail http://PRIVATE_IP:5000/health
+curl --fail http://PRIVATE_IP:9090/-/ready
+curl --fail http://PRIVATE_IP:3100/ready
+```
+
+Desde el servidor privado:
+
+```bash
+curl --fail http://EDGE_PRIVATE_IP:8405/metrics
+curl --fail http://EDGE_PRIVATE_IP:8080/metrics
+curl --fail http://EDGE_PRIVATE_IP:9100/metrics
+```
+
+Desde Internet:
+
+```bash
+curl --fail https://DOMINIO/__proxy_health
+curl --fail https://DOMINIO/api/health
+curl --fail --head https://DOMINIO/login
+```
+
+Confirme después:
+
+- inicio de sesión de los cuatro espacios web;
+- aislamiento de expedientes y permisos;
+- carga, visualización y versionamiento de un PDF de prueba;
+- los objetivos de Prometheus en estado `UP`;
+- métricas y registros de ambos servidores en Grafana;
+- disparo controlado de una alerta;
+- restauración de un respaldo de prueba.
+
+## Aplicación móvil local
+
+Nada de esta carpeta cambia `mobile/App.js`, el puerto `3001` ni la API móvil
+local. Para continuar trabajando localmente se mantienen los comandos actuales:
+
+```powershell
+cd C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main\sistema_nulidad_api
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up --build -d
+```
+
+También puede levantar únicamente el backend necesario para la aplicación móvil
+y sus dependencias:
+
+```powershell
+docker compose up --build -d mobile-api
+```
+
+La base cloud y la base local son entornos independientes y no se sincronizan
+automáticamente. Esta separación evita exponer MySQL o MinIO para mantener la
+aplicación móvil local. Si en el futuro se requiere información compartida en
+tiempo real, deberá publicarse una API móvil HTTPS controlada; nunca se debe
+abrir MySQL directamente a los teléfonos.
+
+## Respaldos
+
+Asocie MySQL, MinIO, Prometheus y Loki a discos persistentes. Programe
+instantáneas, pero compleméntelas con respaldos consistentes de MySQL y pruebas
+de restauración. Una instantánea del disco sin coordinación con la aplicación no
+garantiza por sí sola la consistencia lógica de la base.

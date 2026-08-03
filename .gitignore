@@ -18,3 +18,5 @@ node_modules/
 mobile/.expo/
 mobile/.expo-test-*/
 vendor/
+sistema_nulidad_api/cloud/*.env
+sistema_nulidad_api/cloud/secrets/

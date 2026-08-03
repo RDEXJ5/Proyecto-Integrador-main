@@ -26,7 +26,7 @@ def login(email: str) -> requests.Session:
         data={
             "csrf_token": csrf_token(login_page.text),
             "email": email,
-            "password": "2318",
+            "password": "12345678",
         },
         timeout=15,
     )
@@ -37,7 +37,7 @@ def login(email: str) -> requests.Session:
 
 
 def main() -> None:
-    contributor = login("web.abogado.20260731@example.test")
+    contributor = login("daniela.elizalde@example.test")
     case_page = contributor.get(f"{BASE_URL}/cases/1", timeout=15)
     case_page.raise_for_status()
     if "Agregar documento" not in case_page.text:
@@ -64,7 +64,7 @@ def main() -> None:
         raise AssertionError(f"La carga no redirigió al documento creado: {location}")
     document_id = int(document_match.group(1))
 
-    judge = login("web.juez.20260731@example.test")
+    judge = login("cintia.guzman@example.test")
     document_page = judge.get(f"{BASE_URL}/documents/{document_id}", timeout=15)
     document_page.raise_for_status()
     content_match = re.search(

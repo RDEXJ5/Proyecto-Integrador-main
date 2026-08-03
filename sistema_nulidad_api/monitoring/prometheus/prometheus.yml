@@ -1,0 +1,99 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    system: gestion-documental
+    environment: development
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [prometheus:9090]
+
+  - job_name: api-web
+    metrics_path: /metrics
+    static_configs:
+      - targets: [api:3000]
+
+  - job_name: api-movil
+    metrics_path: /metrics
+    static_configs:
+      - targets: [mobile-api:3001]
+
+  - job_name: web
+    metrics_path: /metrics
+    static_configs:
+      - targets: [web:5000]
+
+  - job_name: haproxy
+    metrics_path: /metrics
+    static_configs:
+      - targets: [haproxy:8405]
+
+  - job_name: mysql
+    static_configs:
+      - targets: [mysql-exporter:9104]
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: [minio:9000]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: [cadvisor:8080]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: [alertmanager:9093]
+
+  - job_name: grafana
+    metrics_path: /grafana/metrics
+    static_configs:
+      - targets: [grafana:3000]
+
+  - job_name: blackbox-internal
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://api:3000/health
+          - http://mobile-api:3001/health
+          - http://web:5000/health
+          - http://minio:9000/minio/health/live
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-proxy
+    metrics_path: /probe
+    params:
+      module: [http_2xx_self_signed]
+    static_configs:
+      - targets:
+          - https://haproxy/__proxy_health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: windows-host
+    file_sd_configs:
+      - files: [/etc/prometheus/file_sd/windows-exporter.yml]
+        refresh_interval: 1m

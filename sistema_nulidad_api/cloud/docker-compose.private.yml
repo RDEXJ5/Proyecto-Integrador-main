@@ -1,0 +1,428 @@
+name: gdi-private
+
+services:
+  db:
+    image: mysql:8.4.11
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?Defina MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../sistema_nulidad_bd/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../../sistema_nulidad_bd/migrations/002_generalizacion_plataforma.sql:/docker-entrypoint-initdb.d/02-generalization.sql:ro
+      - ../../sistema_nulidad_bd/migrations/003_contribution_inline_preview.sql:/docker-entrypoint-initdb.d/03-contribution-inline-preview.sql:ro
+      - ../../sistema_nulidad_bd/migrations/004_document_observation_workflow.sql:/docker-entrypoint-initdb.d/04-document-observation-workflow.sql:ro
+      - ../../sistema_nulidad_bd/migrations/005_case_centric_access.sql:/docker-entrypoint-initdb.d/05-case-centric-access.sql:ro
+      - ../../sistema_nulidad_bd/migrations/006_review_decision_workflow.sql:/docker-entrypoint-initdb.d/06-review-decision-workflow.sql:ro
+      - ../../sistema_nulidad_bd/migrations/007_process_management.sql:/docker-entrypoint-initdb.d/07-process-management.sql:ro
+      - ../../sistema_nulidad_bd/migrations/008_utf8mb4_demo_repair.sql:/docker-entrypoint-initdb.d/08-utf8mb4-demo-repair.sql:ro
+      - ../../sistema_nulidad_bd/migrations/009_spanish_demo_copy.sql:/docker-entrypoint-initdb.d/09-spanish-demo-copy.sql:ro
+      - ../../sistema_nulidad_bd/migrations/010_spanish_catalog_copy.sql:/docker-entrypoint-initdb.d/10-spanish-catalog-copy.sql:ro
+      - ../../sistema_nulidad_bd/migrations/011_spanish_legal_catalogs.sql:/docker-entrypoint-initdb.d/11-spanish-legal-catalogs.sql:ro
+      - ../../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/docker-entrypoint-initdb.d/12-mobile-api-channel.sql:ro
+      - ../../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/docker-entrypoint-initdb.d/13-mobile-registration-invitations.sql:ro
+      - ../../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/docker-entrypoint-initdb.d/15-workspace-accounts.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  db-migrate:
+    image: mysql:8.4.11
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ../../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/migrations/012_mobile_api_channel.sql:ro
+      - ../../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/migrations/013_mobile_registration_invitations.sql:ro
+      - ../../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/migrations/015_workspace_accounts.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/012_mobile_api_channel.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/013_mobile_registration_invitations.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/015_workspace_accounts.sql
+    networks:
+      - data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  minio-volume-init:
+    image: alpine:3.22
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 100:101 /data"]
+    volumes:
+      - minio_data:/data
+    networks:
+      - data
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    restart: unless-stopped
+    depends_on:
+      minio-volume-init:
+        condition: service_completed_successfully
+    command: server /data --console-address ":9001"
+    env_file:
+      - ${PRIVATE_STORAGE_ENV_FILE:-./private.storage.env}
+    environment:
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - data
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  minio-setup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - ${PRIVATE_STORAGE_ENV_FILE:-./private.storage.env}
+    environment:
+      MC_CONFIG_DIR: /tmp/.mc
+    volumes:
+      - ../minio/policy.json:/config/policy.json:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing --with-lock "local/$$MINIO_BUCKET" &&
+        mc version enable "local/$$MINIO_BUCKET" &&
+        mc retention set --default COMPLIANCE 10y "local/$$MINIO_BUCKET" &&
+        mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" &&
+        mc admin policy create local expediente-api /config/policy.json &&
+        mc admin policy attach local expediente-api --user "$$MINIO_ACCESS_KEY"
+    networks:
+      - data
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      minio-setup:
+        condition: service_completed_successfully
+    env_file:
+      - ${PRIVATE_STORAGE_ENV_FILE:-./private.storage.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER:?Defina MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      JWT_ISSUER: ${JWT_ISSUER:-sistema-nulidad-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sistema-nulidad-clients}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY:?Defina API_APPLICATION_KEY}
+      PLATFORM_SIGNATURE_SECRET: ${PLATFORM_SIGNATURE_SECRET:?Defina PLATFORM_SIGNATURE_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Defina CORS_ORIGINS con el dominio HTTPS}
+    ports:
+      - "${PRIVATE_BIND_ADDRESS:?Defina PRIVATE_BIND_ADDRESS}:3000:3000"
+    networks:
+      - data
+      - application
+      - monitoring
+      - cloud-link
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: ../../sistema_nulidad_web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:3000
+      WEB_ENV: production
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?Defina FLASK_SECRET_KEY}
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_DIR: /tmp/sessions
+    ports:
+      - "${PRIVATE_BIND_ADDRESS:?Defina PRIVATE_BIND_ADDRESS}:5000:5000"
+    networks:
+      - application
+      - monitoring
+      - cloud-link
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  mysql-exporter-init:
+    image: mysql:8.4.11
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD}
+      MYSQL_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD:?Defina MYSQL_EXPORTER_PASSWORD}
+    volumes:
+      - mysql_exporter_config:/cfg
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mysql --host=db --user=root --execute="CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '$$MYSQL_EXPORTER_PASSWORD'; ALTER USER 'exporter'@'%' IDENTIFIED BY '$$MYSQL_EXPORTER_PASSWORD'; GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%'; FLUSH PRIVILEGES;"
+        umask 077
+        printf '[client]\nuser=exporter\npassword=%s\nhost=db\nport=3306\n' "$$MYSQL_EXPORTER_PASSWORD" > /cfg/.my.cnf
+        chmod 0444 /cfg/.my.cnf
+    networks:
+      - data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.19.0
+    restart: unless-stopped
+    depends_on:
+      mysql-exporter-init:
+        condition: service_completed_successfully
+    command:
+      - --config.my-cnf=/cfg/.my.cnf
+      - --collect.info_schema.innodb_metrics
+    volumes:
+      - mysql_exporter_config:/cfg:ro
+    networks:
+      - data
+      - monitoring
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.57.0
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --disable_metrics=disk
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.11.1
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ../monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    extra_hosts:
+      - "edge.internal:${EDGE_PRIVATE_IP:?Defina EDGE_PRIVATE_IP}"
+    networks:
+      - monitoring
+      - cloud-link
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alert-receiver:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node", "src/observability/alert-receiver.js"]
+    restart: unless-stopped
+    environment:
+      PORT: 9094
+    networks:
+      - monitoring
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alertmanager:
+    image: prom/alertmanager:v0.32.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --enable-feature=utf8-strict-mode
+    volumes:
+      - ../monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      - alert-receiver
+    networks:
+      - monitoring
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v3.13.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - alertmanager
+      - blackbox-exporter
+      - mysql-exporter
+      - cadvisor
+      - node-exporter
+    extra_hosts:
+      - "edge.internal:${EDGE_PRIVATE_IP:?Defina EDGE_PRIVATE_IP}"
+    ports:
+      - "${PRIVATE_BIND_ADDRESS:?Defina PRIVATE_BIND_ADDRESS}:9090:9090"
+    networks:
+      - monitoring
+      - cloud-link
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  loki:
+    image: grafana/loki:3.7.4
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/loki.yml
+    volumes:
+      - ../monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports:
+      - "${PRIVATE_BIND_ADDRESS:?Defina PRIVATE_BIND_ADDRESS}:3100:3100"
+    networks:
+      - monitoring
+      - cloud-link
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    restart: unless-stopped
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      MONITORED_COMPOSE_PROJECT: gdi-private
+    volumes:
+      - ../monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mysql_data:
+  minio_data:
+  mysql_exporter_config:
+  prometheus_data:
+  alertmanager_data:
+  loki_data:
+  alloy_data:
+
+networks:
+  data:
+    internal: true
+  application:
+    internal: true
+  monitoring:
+    internal: true
+  cloud-link:

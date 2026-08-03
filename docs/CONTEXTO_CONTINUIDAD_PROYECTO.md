@@ -1,23 +1,23 @@
-# Contexto de continuidad: Expediente Íntegro
+# Contexto de continuidad: Sistema Integral de Gestión Documental 2.0
 
 > Este documento está preparado para entregarse a otro chat de Codex. Su propósito es evitar que se reconstruyan componentes que ya existen o que se retomen carpetas descartadas.
 
 ## Instrucción principal para el siguiente chat
 
-Continúa el proyecto **Expediente Íntegro** desde el estado descrito aquí. Antes de modificar algo, inspecciona los archivos actuales y el estado de Docker. No reinicies la arquitectura, no recrees la base de datos, no elimines volúmenes y no sustituyas componentes que ya funcionan. Conserva los cambios existentes del usuario y evita trabajar sobre las carpetas heredadas equivocadas.
+Continúa el **Sistema Integral de Gestión Documental** desde el estado descrito aquí. Antes de modificar algo, inspecciona los archivos actuales y el estado de Docker. No reinicies la arquitectura, no recrees la base de datos, no elimines volúmenes y no sustituyas componentes que ya funcionan. Conserva los cambios existentes del usuario y evita trabajar sobre las carpetas heredadas equivocadas.
 
 ## Ubicación y componentes canónicos
 
-El proyecto activo utilizado por Docker está en:
-
-```text
-C:\Users\britz\OneDrive\Documentos\GitHub\Proyecto
-```
-
-La copia que puede aparecer como espacio de trabajo de Codex está en:
+El proyecto activo de la versión 2.0 utilizado por Docker en esta copia de trabajo está en:
 
 ```text
 C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main
+```
+
+Existe una copia anterior en OneDrive que no debe mezclarse automáticamente con esta versión:
+
+```text
+C:\Users\britz\OneDrive\Documentos\GitHub\Proyecto
 ```
 
 Los componentes canónicos son:
@@ -45,7 +45,7 @@ Principios obligatorios:
 - Un archivo nunca se sobrescribe; cualquier corrección crea una versión nueva.
 - La trazabilidad debe conservar accesos, cambios, revisiones, observaciones, autorizaciones, firmas y decisiones.
 - Los datos personales son sensibles: INE, CURP, RFC, actas, comprobantes y documentos de testigos.
-- El tipo documental determina si se analiza una firma y si requiere autorización, certificación o firma de plataforma. Esto evita exigir firma a documentos que no la necesitan.
+- El tipo documental determina si requiere autorización, certificación o firma de plataforma. Esto evita exigir firma a documentos que no la necesitan. La detección automática de firmas fue retirada del alcance por decisión del equipo.
 - La web solo carga archivos existentes. La captura con cámara pertenece exclusivamente a la aplicación móvil.
 - Los documentos se visualizan dentro de la web con PDF.js. La existencia de un visor no sustituye la autorización de la API.
 
@@ -53,6 +53,7 @@ Principios obligatorios:
 
 ```text
 Navegador
+   -> HAProxy con HTTPS
    -> Flask con sesión de servidor y CSRF
    -> API web Node.js (puerto 3000)
 Aplicación Expo
@@ -61,6 +62,9 @@ Ambas APIs
    -> JWT, RBAC y autorización por recurso
    -> MySQL para metadatos, reglas y trazabilidad
    -> MinIO privado para archivos cifrados y versionados
+Monitoreo
+   -> Prometheus, Grafana, Alertmanager, Loki y Alloy
+   -> MySQL Exporter, cAdvisor y Blackbox Exporter
 ```
 
 La API móvil se implementa como un proceso separado, pero reutiliza los mismos
@@ -68,7 +72,7 @@ servicios de autenticación, versionamiento, políticas y almacenamiento. Sólo
 expone expedientes participantes, documentos propios, cargas desde archivo o
 cámara, versiones y respuestas a observaciones. No expone descargas, firmas,
 autorizaciones, decisiones ni administración. La migración más reciente es
-`012_mobile_api_channel.sql`.
+`015_workspace_accounts.sql`.
 
 Tecnologías principales:
 
@@ -78,8 +82,15 @@ Tecnologías principales:
 - MinIO con versionado y retención predeterminada en modo de cumplimiento durante 10 años.
 - PDF.js 5.7.284 empaquetado localmente, sin CDN en ejecución.
 - Docker Compose como entorno de integración.
+- HAProxy 3.2, Prometheus, Grafana, Alertmanager, Loki, Alloy y exportadores para el monitoreo.
 
 MySQL no está publicado al anfitrión. API, web y consolas están enlazadas únicamente a `127.0.0.1`.
+
+El despliegue opcional para Google Cloud está en `sistema_nulidad_api/cloud/` y
+separa dos proyectos Compose: `gdi-edge` para HAProxy, Grafana y agentes del
+servidor público; `gdi-private` para web, API, datos y monitoreo privado. Esos
+archivos no sustituyen el entorno local. La aplicación y la API móvil permanecen
+locales y no se publican mediante el HAProxy cloud.
 
 ## Espacios de trabajo y permisos funcionales
 
@@ -89,8 +100,8 @@ MySQL no está publicado al anfitrión. API, web y consolas están enlazadas ún
 | Revisión y decisión | Juez y notario | Casos asignados, personas involucradas, documentos, revisión y observaciones. El juez emite decisiones y firmas; el notario autoriza y certifica. Ambos pueden descargar cuando el permiso y la política lo permiten. |
 | Gestión procesal | Secretario y coordinador | Crear expedientes, asignar responsables, registrar o finalizar participantes, cambiar etapas, crear/cerrar plazos y modificar estados lógicos. |
 | Auditoría | Auditor | Eventos, accesos, versiones, firmas y reporte CSV en modo de solo lectura. |
-| Administración técnica | Administrador TI | Usuarios, estados lógicos, concesión/revocación de roles, catálogos documentales, configuración y salud. No tiene acceso jurídico implícito. |
-| Consulta personal móvil | Parte y testigo | Deben usar el canal móvil y acceder únicamente a su información y documentos propios. La integración móvil completa sigue pendiente. |
+| Administración técnica | Administrador TI | Usuarios, estados lógicos, concesión/revocación de roles y catálogos documentales. No tiene acceso jurídico implícito. Las pantallas de configuración y salud fueron retiradas por solicitud del equipo. |
+| Consulta personal móvil | Parte y testigo | Registro, invitaciones, expedientes aceptados, carga desde archivo o cámara, versiones y observaciones exclusivamente propias. |
 
 Rutas web principales:
 
@@ -148,7 +159,6 @@ Las secciones repetidas se consolidaron. Por ejemplo, revisión usa `Expedientes
 - Usuarios con suspensión, activación o archivo lógico.
 - Roles revocables sin borrar el historial.
 - Catálogo de tipos documentales y primera regla de flujo.
-- Salud de API, base y almacenamiento.
 - Eventos de auditoría traducidos y reporte CSV.
 
 ## Política documental
@@ -161,11 +171,10 @@ Las tablas `document_type_rules` y `document_version_policies` ya modelan:
 - mínimo de firmas;
 - autorización y rol autorizador;
 - certificación y rol certificador;
-- análisis automático: omitir, bajo solicitud o automático;
 - prioridad y vigencia de la regla;
 - instantánea inmutable de la política usada por cada versión.
 
-No se debe ejecutar un analizador de firma de manera indiscriminada. Primero se consulta el tipo y la política de la versión.
+No existe un servicio de detección automática de firmas en la versión vigente. La decisión sobre los requisitos de cada documento se toma exclusivamente desde su tipo y la instantánea de política.
 
 ## Modelo de datos importante
 
@@ -178,7 +187,6 @@ No se debe ejecutar un analizador de firma de manera indiscriminada. Primero se 
 - Políticas: `document_type_rules`, `document_version_policies`, `document_version_metadata`.
 - Almacenamiento: `storage_objects` y binarios históricos heredados.
 - Flujo: `document_actions`, `document_signature_records`, observaciones y respuestas.
-- Análisis futuro: `document_analysis_jobs`, `document_analysis_results`.
 - Auditoría: `audit_events`.
 
 Los triggers impiden operaciones físicas destructivas y cambios sobre hechos inmutables. Si una actualización falla con un mensaje de inmutabilidad, no se debe desactivar el trigger; debe crearse una nueva versión, decisión o registro de estado.
@@ -199,15 +207,18 @@ El esquema actual incluye `schema.sql` y migraciones hasta:
 009_spanish_demo_copy.sql
 010_spanish_catalog_copy.sql
 011_spanish_legal_catalogs.sql
+012_mobile_api_channel.sql
+013_mobile_registration_invitations.sql
+015_workspace_accounts.sql
 ```
 
-La siguiente migración debe numerarse `012_...sql`.
+La migración experimental `014_signature_detection_v2.sql` fue retirada del repositorio al descartarse la detección automática de firmas. El volumen local ya la había ejecutado antes del retiro y conserva su asiento y tablas por la regla de no borrado. Los permisos de análisis añadidos a juez y notario se revocaron lógicamente el 3 de agosto de 2026. La migración `015_workspace_accounts.sql` crea las cuatro cuentas por espacio y archiva lógicamente las cuentas `web.*`. La siguiente migración debe numerarse `016_...sql`.
 
 Los scripts en `/docker-entrypoint-initdb.d` solo se ejecutan al crear un volumen nuevo. En una base existente, aplicar una migración sin borrar el volumen mediante copia binaria al contenedor:
 
 ```powershell
-docker compose cp "..\sistema_nulidad_bd\migrations\012_ejemplo.sql" db:/tmp/012_ejemplo.sql
-docker compose exec -T db sh -c "mysql -uroot -p2318 --default-character-set=utf8mb4 < /tmp/012_ejemplo.sql"
+docker compose cp "..\sistema_nulidad_bd\migrations\016_ejemplo.sql" db:/tmp/016_ejemplo.sql
+docker compose exec -T db sh -c "mysql -uroot -p2318 --default-character-set=utf8mb4 < /tmp/016_ejemplo.sql"
 ```
 
 No canalizar SQL con `Get-Content | docker compose exec`, porque PowerShell dañó acentos en una prueba anterior. No ejecutar `docker compose down -v` salvo autorización explícita: destruye la base y los archivos del entorno.
@@ -239,27 +250,23 @@ MinIO, API, PDF, SHA-256, CURP, RFC, PDF.js y otros nombres técnicos inevitable
 - Cifrado documental, SHA-256, versionado y retención.
 - Las claves JWT, API, firma de plataforma, MinIO y cifrado son secretos distintos y no se deben imprimir ni confirmar en un chat.
 - Los archivos `.env` y `.env.storage` ya existen en el proyecto activo y no deben versionarse ni reemplazarse sin necesidad.
-- La contraseña `2318` es únicamente la convención actual de desarrollo para cuentas funcionales y MySQL. No debe sustituir secretos criptográficos ni utilizarse en producción.
+- La contraseña `12345678` se usa únicamente en las cuatro cuentas web operativas de desarrollo. Las cuentas móviles y MySQL conservan `2318`. Ninguna debe sustituir secretos criptográficos ni utilizarse en producción.
 
 ## Credenciales funcionales de desarrollo
 
-Todas estas cuentas están activas. La contraseña de desarrollo general es `2318`, salvo la cuenta de Cristian indicada en la tabla.
+Las cuentas web operativas usan la contraseña de desarrollo `12345678`. Las cuentas móviles usan `2318` y la cuenta de Cristian conserva la contraseña indicada en la tabla.
 
 | Perfil | Correo | Canal |
 |---|---|---|
-| Administración TI | `admin.web@example.test` | Web |
 | Administración TI (Cristian Erasto Corona Uribe) | `cristian05corona@gmail.com` — contraseña `27098644` | Web técnica y móvil como parte interesada |
-| Notario | `web.notario.20260731@example.test` | Web |
-| Juez | `web.juez.20260731@example.test` | Web |
-| Abogado | `web.abogado.20260731@example.test` | Web |
-| Fiscal | `web.fiscal.20260731@example.test` | Web |
-| Defensor | `web.defensor.20260731@example.test` | Web |
-| Perito | `web.perito.20260731@example.test` | Web |
-| Secretario | `web.secretario.20260731@example.test` | Web |
-| Coordinador | `web.coordinador.20260731@example.test` | Web |
-| Auditor | `web.auditor.20260731@example.test` | Web |
+| Carga y seguimiento (Daniela Lisset Elizalde Ortiz) | `daniela.elizalde@example.test` | Web |
+| Revisión y decisión (Cintia Ailin Guzman Morales) | `cintia.guzman@example.test` | Web |
+| Gestión procesal (Britany Itzel Corona Uribe) | `britany.corona@example.test` | Web |
+| Auditoría (Jesus Alejandro Corona Sixtos) | `jesus.corona@example.test` | Web |
 | Parte | `mobile.parte.20260731@example.test` | Móvil |
 | Testigo | `mobile.testigo.20260731@example.test` | Móvil |
+
+Las cuentas heredadas cuyo correo comienza con `web.` están archivadas. Sus concesiones, asignaciones y membresías activas fueron revocadas sin eliminar el historial.
 
 Parte y testigo no deben acceder a los espacios web. Que el servidor rechace ese acceso es el comportamiento correcto.
 
@@ -279,9 +286,9 @@ Los perfiles solo deben ver estos casos si cuentan con asignación, participaci�
 Directorio de ejecución:
 
 ```powershell
-cd C:\Users\britz\OneDrive\Documentos\GitHub\Proyecto\sistema_nulidad_api
-docker compose up --build -d
-docker compose ps
+cd C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main\sistema_nulidad_api
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up --build -d
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml ps -a
 ```
 
 Direcciones locales:
@@ -293,47 +300,59 @@ Swagger:       http://127.0.0.1:3000/docs
 OpenAPI JSON:  http://127.0.0.1:3000/openapi.json
 MinIO API:     http://127.0.0.1:9000
 MinIO consola: http://127.0.0.1:9001
+Entrada HTTPS: https://localhost:8443/login
+API por proxy: https://localhost:8443/api/health
+API móvil:     https://localhost:8443/mobile-api/health
+Grafana:       https://localhost:8443/grafana/
 ```
 
-Estado confirmado el 2 de agosto de 2026:
+Estado confirmado el 3 de agosto de 2026:
 
 - API: activa y saludable.
 - MySQL: activo y saludable.
 - MinIO: activo y saludable.
 - Web Flask: activa en el puerto 5000.
+- HAProxy: HTTPS y enrutamiento de web, API web, API móvil y Grafana.
+- Prometheus: 15 objetivos activos y saludables en la verificación final.
+- Grafana: tablero y orígenes Prometheus/Loki aprovisionados.
+- Alertmanager: entrega de alerta de prueba confirmada en el receptor interno.
+- Loki y Alloy: recepción de logs limitada al proyecto canónico.
 
 Para detener sin borrar:
 
 ```powershell
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml down
 ```
 
 Para revisar errores:
 
 ```powershell
-docker compose ps
-docker compose logs --tail 100 api web db minio
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml ps -a
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml logs --tail 100 api mobile-api web db minio haproxy prometheus grafana
 ```
 
 ## Pruebas confirmadas
 
 Última verificación:
 
-- 30 pruebas de la web superadas.
-- 12 pruebas de autorización y flujo de la API superadas.
+- 40 pruebas de la web superadas.
+- 29 pruebas de autorización, seguridad, flujo documental y métricas de la API superadas.
+- Exportación Android de Expo completada correctamente para la aplicación móvil 2.0.
 - Catálogos revisados sin texto UTF-8 dañado.
-- Auditoría visual en navegador de roles, catálogos, configuración, salud, expediente del juez y detalle documental.
+- Auditoría visual en navegador de roles, catálogos, perfiles, expediente del juez y detalle documental.
+- Validación de Prometheus, 10 reglas de alerta, Alertmanager, HAProxy y Alloy superada.
+- Prueba de HTTPS y alerta temporal de extremo a extremo superada.
 
 Los Dockerfile de producción no copian las carpetas de pruebas. Por eso `docker compose exec api npm test` puede informar cero pruebas. Para ejecutar las suites reales con las imágenes ya construidas:
 
 ```powershell
 docker run --rm `
-  -v "C:\Users\britz\OneDrive\Documentos\GitHub\Proyecto\sistema_nulidad_api\test:/app/test:ro" `
+  -v "C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main\sistema_nulidad_api\test:/app/test:ro" `
   sistema_nulidad_api-api:latest npm test
 
 docker run --rm --entrypoint python `
   -e PYTHONPATH=/app `
-  -v "C:\Users\britz\OneDrive\Documentos\GitHub\Proyecto\sistema_nulidad_web\tests:/tests:ro" `
+  -v "C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main\sistema_nulidad_web\tests:/tests:ro" `
   sistema_nulidad_api-web:latest `
   -m unittest discover -s /tests -v
 ```
@@ -360,6 +379,14 @@ sistema_nulidad_bd/migrations/010_spanish_catalog_copy.sql
 sistema_nulidad_bd/migrations/011_spanish_legal_catalogs.sql
 sistema_nulidad_bd/migrations/012_mobile_api_channel.sql
 sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql
+sistema_nulidad_bd/migrations/015_workspace_accounts.sql
+sistema_nulidad_api/docker-compose.monitoring.yml
+sistema_nulidad_api/src/observability/metrics.js
+sistema_nulidad_api/src/observability/alert-receiver.js
+sistema_nulidad_api/monitoring/
+sistema_nulidad_api/cloud/docker-compose.edge.yml
+sistema_nulidad_api/cloud/docker-compose.private.yml
+sistema_nulidad_api/cloud/README.md
 sistema_nulidad_web/app.py
 sistema_nulidad_web/templates/workspace_section.html
 sistema_nulidad_web/templates/case_detail.html
@@ -370,12 +397,16 @@ sistema_nulidad_web/static/document-viewer.mjs
 
 ## Trabajo pendiente y orden recomendado
 
-La base web es funcional para los flujos implementados, pero el producto no debe considerarse terminado para producción. El siguiente trabajo recomendado es:
+La base web y móvil es funcional para los flujos implementados, pero el producto no debe considerarse terminado para producción. La detección automática de firmas está expresamente fuera del alcance vigente. El siguiente trabajo recomendado es:
 
-1. Implementar el proveedor real de OCR y detección/verificación de firmas usando las tablas de trabajos y resultados ya existentes, siempre respetando la política del tipo documental.
+1. Implementar el proveedor real de OCR cuando el equipo confirme proveedor, costos y tratamiento de datos sensibles.
 2. Ampliar pruebas integrales por rol, casos no asignados, estados lógicos y fallos de MinIO.
-3. Antes de producción: HTTPS y proxy inverso, rotación de secretos, contraseñas robustas, verificación de correo, MFA o recuperación segura, escaneo antimalware, copias de seguridad, restauración probada, monitoreo y estrategia de alta disponibilidad.
-4. Definir el alcance legal de la firma: la firma de integridad actual no sustituye automáticamente una firma electrónica cualificada o un certificado legal.
+3. Configurar certificados TLS reales, rotación de secretos, contraseñas robustas, verificación de correo, MFA o recuperación segura y escaneo antimalware.
+4. Implementar copias de seguridad y una restauración probada de MySQL, MinIO y los volúmenes operativos.
+5. Configurar destinatarios externos de Alertmanager, métricas del anfitrión Windows y una estrategia de alta disponibilidad.
+6. Definir el alcance legal de la firma de plataforma: la firma de integridad actual no sustituye automáticamente una firma electrónica cualificada o un certificado legal.
+
+La guía operativa del monitoreo está en `docs/MONITOREO.md`.
 
 Las membresías organizativas permanecen como soporte interno de compatibilidad en la base de datos, pero su administración no forma parte del alcance funcional del sistema.
 
@@ -384,5 +415,5 @@ No volver a crear desde cero la base, API, web, MinIO, visor PDF, espacios de tr
 ## Frase corta para iniciar otro chat
 
 ```text
-Lee primero docs/CONTEXTO_CONTINUIDAD_PROYECTO.md y continúa Expediente Íntegro desde ese estado. No reconstruyas lo ya implementado, no uses las carpetas heredadas API/frontend/mysql como sistema principal, no borres volúmenes ni datos, conserva la interfaz móvil y verifica Docker y los archivos actuales antes de proponer cambios.
+Lee primero docs/CONTEXTO_CONTINUIDAD_PROYECTO.md y continúa el Sistema Integral de Gestión Documental desde ese estado. No reconstruyas lo ya implementado, no uses las carpetas heredadas API/frontend/mysql como sistema principal, no borres volúmenes ni datos, conserva la interfaz móvil y verifica Docker y los archivos actuales antes de proponer cambios.
 ```

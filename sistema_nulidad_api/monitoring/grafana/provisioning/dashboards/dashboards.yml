@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: Sistema Integral de Gestión Documental
+    orgId: 1
+    folder: Monitoreo del sistema
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sistema Integral de Gestión Documental",
     "slug": "expediente-integro-mobile",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "plugins": [
