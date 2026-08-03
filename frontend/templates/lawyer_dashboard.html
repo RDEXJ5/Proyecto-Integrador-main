@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Mis expedientes · Expediente Íntegro{% endblock %}
+{% block content %}
+<section class="role-hero lawyer-hero">
+  <div>
+    <p class="eyebrow">Vista del abogado · Web</p>
+    <h1>Mis expedientes y libelos</h1>
+    <p>Gestiona únicamente los asuntos de tus clientes, registra versiones nuevas sin sobrescribir el historial y consulta su trazabilidad.</p>
+  </div>
+  <div class="role-chip">Abogado · alcance propio</div>
+</section>
+
+<section class="metric-grid">
+  <article class="metric-card"><span>Mis expedientes</span><strong>{{ cases|length }}</strong><small>Asignados a tu cuenta</small></article>
+  <article class="metric-card"><span>Mis documentos</span><strong>{{ documents|length }}</strong><small>Libelos y anexos visibles</small></article>
+  <article class="metric-card"><span>Acción permitida</span><strong>Versionar</strong><small>Nunca sustituye el archivo previo</small></article>
+</section>
+
+<section class="grid two workspace-grid">
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Cartera de asuntos</p><h2>Expedientes de mis clientes</h2></div><a class="button secondary" href="{{ url_for('create_case') }}">Nuevo expediente</a></div>
+    {% for case in cases %}
+      <a class="case-row action-row" href="{{ url_for('case_detail', case_id=case.id) }}"><div><strong>{{ case.folio }}</strong><span>{{ case.title }}</span><small>Consultar documentos y registrar anexos</small></div><span class="status {{ case.status }}">{{ case.status }}</span></a>
+    {% else %}<p class="empty">Todavía no tienes expedientes asignados.</p>{% endfor %}
+  </article>
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Historial de documentos</p><h2>Libelos y anexos</h2></div><a class="button secondary" href="{{ url_for('create_document') }}">Registrar documento</a></div>
+    {% for document in documents[:7] %}
+      <a class="case-row action-row" href="{{ url_for('document_detail', document_id=document.id) }}"><div><strong>{{ document.title }}</strong><span>{{ document.kind }} · expediente {{ document.case_id }}</span><small>Crear una versión nueva conservando las anteriores</small></div>{% if document.contains_sensitive_data %}<span class="sensitive">sensible</span>{% endif %}</a>
+    {% else %}<p class="empty">No hay documentos vinculados a tus asuntos.</p>{% endfor %}
+  </article>
+</section>
+{% endblock %}

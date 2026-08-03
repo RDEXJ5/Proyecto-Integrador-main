@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Control notarial · Expediente Íntegro{% endblock %}
+{% block content %}
+<section class="role-hero notary-hero">
+  <div>
+    <p class="eyebrow">Vista notarial · Web</p>
+    <h1>Control y certificación documental</h1>
+    <p>Valida documentos contra sus originales, conserva el rastro de cada decisión y prepara versiones para la firma judicial.</p>
+  </div>
+  <div class="role-chip">Notario · acceso integral</div>
+</section>
+
+<section class="metric-grid">
+  <article class="metric-card"><span>Expedientes</span><strong>{{ cases|length }}</strong><small>Activos y archivados con trazabilidad</small></article>
+  <article class="metric-card"><span>Documentos</span><strong>{{ documents|length }}</strong><small>Incluye datos sensibles protegidos</small></article>
+  <article class="metric-card"><span>Acción notarial</span><strong>Autorizar</strong><small>Registra visto bueno y nota de certificación</small></article>
+</section>
+
+<section class="grid two workspace-grid">
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Administración del expediente</p><h2>Expedientes bajo control</h2></div><a class="button secondary" href="{{ url_for('create_case') }}">Crear expediente</a></div>
+    {% for case in cases %}
+      <a class="case-row action-row" href="{{ url_for('case_detail', case_id=case.id) }}"><div><strong>{{ case.folio }}</strong><span>{{ case.title }}</span><small>Revisar estado, documentos y participantes</small></div><span class="status {{ case.status }}">{{ case.status }}</span></a>
+    {% else %}<p class="empty">Aún no existen expedientes registrados.</p>{% endfor %}
+  </article>
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Bandeja de validación</p><h2>Documentos para certificar</h2></div><a class="button secondary" href="{{ url_for('create_document') }}">Registrar documento</a></div>
+    {% for document in documents[:7] %}
+      <a class="case-row action-row" href="{{ url_for('document_detail', document_id=document.id) }}"><div><strong>{{ document.title }}</strong><span>{{ document.kind }} · expediente {{ document.case_id }}</span><small>Abrir historial y registrar autorización</small></div>{% if document.contains_sensitive_data %}<span class="sensitive">sensible</span>{% endif %}</a>
+    {% else %}<p class="empty">No hay documentos pendientes de revisión.</p>{% endfor %}
+  </article>
+</section>
+{% endblock %}

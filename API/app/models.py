@@ -42,6 +42,22 @@ class DocumentKind(str, enum.Enum):
     other = "other"
 
 
+class DocumentType(Base):
+    __tablename__ = "document_types"
+
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500))
+    requires_notarial_authorization: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requires_judicial_signature: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    default_sensitive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    documents: Mapped[list["Document"]] = relationship(back_populates="document_type")
+
+
 class AuthorizationDecision(str, enum.Enum):
     authorized = "authorized"
     rejected = "rejected"
@@ -98,7 +114,9 @@ class Document(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), nullable=False, index=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    kind: Mapped[DocumentKind] = mapped_column(Enum(DocumentKind), nullable=False)
+    kind: Mapped[str] = mapped_column(ForeignKey("document_types.code"), nullable=False, index=True)
+    requires_notarial_authorization: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requires_judicial_signature: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     contains_sensitive_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -107,6 +125,7 @@ class Document(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     case: Mapped[Case] = relationship(back_populates="documents")
+    document_type: Mapped[DocumentType] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
 

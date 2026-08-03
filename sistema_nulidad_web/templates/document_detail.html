@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+{% block title %}{{ document.title }} - Expediente Íntegro{% endblock %}
+{% block content %}
+  <a class="back-link" href="{{ url_for('case_detail', case_id=document.case_id) }}">Volver a documentos</a>
+
+  <section class="detail-heading">
+    <div>
+      <span class="folio">{{ document.document_type_label or document.document_type_code|ui_label('document_type') }}</span>
+      <h1>{{ document.title }}</h1>
+      <p>{{ document.description or "Documento sin descripción registrada." }}</p>
+    </div>
+    <span class="status status-{{ document.lifecycle_status }}">{{ status_labels.get(document.lifecycle_status, document.lifecycle_status|replace('_', ' ')) }}</span>
+  </section>
+
+  <section class="record-summary document-summary">
+    <div><span>Tipo documental</span><strong>{{ document.document_type_label or document.document_type_code|ui_label('document_type') }}</strong></div>
+    <div><span>Información sensible</span><strong>{{ "Sí" if document.contains_sensitive_data else "No" }}</strong></div>
+    <div><span>Espacio actual</span><strong>{{ active_workspace.label }}</strong></div>
+    <div><span>Conservación</span><strong>Sin eliminación física</strong></div>
+  </section>
+
+  <section class="context-panel">
+    <strong>Política documental por versión</strong>
+    <p>La autorización, certificación, firma y análisis automático solamente se aplican cuando la regla del tipo documental lo exige.</p>
+  </section>
+
+  {% if "document.version.create" in current_permissions and active_workspace.code == "contribution" %}
+    <section class="document-upload-panel compact-upload-panel">
+      <div class="upload-panel-heading">
+        <div>
+          <span class="sidebar-eyebrow">VERSIONAMIENTO INMUTABLE</span>
+          <h2>Versionamiento documental</h2>
+          <p>El archivo anterior permanecerá íntegro y consultable en el historial.</p>
+        </div>
+      </div>
+      <details class="creation-disclosure">
+        <summary class="button button-primary">+ Agregar una nueva versión</summary>
+      <form class="document-form inline-upload-form creation-form" method="post" action="{{ url_for('upload_document_version', document_id=document.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="file-field">
+          <span>Archivo, máximo 25 MB</span>
+          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required>
+        </label>
+        <button class="button button-primary" type="submit">Crear versión</button>
+      </form>
+      </details>
+    </section>
+  {% endif %}
+
+  {% if versions and "document.content.read.web" in current_permissions %}
+    <section
+      id="document-viewer"
+      class="document-viewer"
+      data-document-viewer
+      data-pdfjs-module="{{ url_for('static', filename='vendor/pdfjs/pdf.min.mjs') }}"
+      data-pdfjs-worker="{{ url_for('static', filename='vendor/pdfjs/pdf.worker.min.mjs') }}"
+      data-pdfjs-cmaps="{{ url_for('static', filename='vendor/pdfjs/cmaps/') }}"
+      data-pdfjs-fonts="{{ url_for('static', filename='vendor/pdfjs/standard_fonts/') }}"
+    >
+      <div class="viewer-heading">
+        <div>
+          <span class="sidebar-eyebrow">VISTA PREVIA PROTEGIDA</span>
+          <h2 id="viewer-title">Visor del documento</h2>
+          <p id="viewer-file-name">Selecciona una versión para consultarla en esta misma página.</p>
+        </div>
+        <div class="viewer-access">
+          {% if "document.download.web" in current_permissions %}
+            <a id="viewer-download" class="button button-primary" href="#" hidden>Descargar original</a>
+          {% else %}
+            <span class="read-only-badge">Solo visualización</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="viewer-toolbar" aria-label="Controles del visor PDF">
+        <button id="viewer-previous" class="viewer-control" type="button" disabled aria-label="Página anterior">Anterior</button>
+        <span id="viewer-page-status" class="viewer-page-status">Página - de -</span>
+        <button id="viewer-next" class="viewer-control" type="button" disabled aria-label="Página siguiente">Siguiente</button>
+        <span class="viewer-toolbar-separator" aria-hidden="true"></span>
+        <button id="viewer-zoom-out" class="viewer-control" type="button" disabled aria-label="Alejar">-</button>
+        <span id="viewer-zoom-status" class="viewer-zoom-status">100%</span>
+        <button id="viewer-zoom-in" class="viewer-control" type="button" disabled aria-label="Acercar">+</button>
+      </div>
+
+      <div id="viewer-stage" class="viewer-stage" aria-live="polite">
+        <p id="viewer-message" class="viewer-message">Preparando la vista previa...</p>
+        <canvas id="viewer-canvas" aria-label="Página del documento PDF" hidden></canvas>
+        <img id="viewer-image" alt="Vista previa del documento" draggable="false" hidden>
+      </div>
+      <p class="viewer-security-note">El original permanece cifrado en MinIO. La visualización y cualquier descarga autorizada quedan registradas en auditoría.</p>
+    </section>
+  {% endif %}
+
+  <section class="section-heading">
+    <div>
+      <h2>Historial de versiones</h2>
+      <p>Cada archivo conserva identidad, origen y estados independientes.</p>
+    </div>
+    <span class="count-badge">{{ versions|length }} {{ 'versión' if versions|length == 1 else 'versiones' }}</span>
+  </section>
+
+  {% if versions %}
+    <section data-filter-scope aria-label="Filtrar versiones documentales">
+      <div class="filter-panel">
+        <div class="filter-panel-heading"><div><strong>Filtrar versiones</strong><small>Los criterios visibles responden a las acciones permitidas para tu perfil.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+        <div class="filter-controls">
+          <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Versión, título, archivo o huella"></label>
+          <label class="filter-field"><span>Estado</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in versions|map(attribute='lifecycle_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Revisión</span><select data-filter-key="review"><option value="">Todos los estados</option>{% for value in versions|map(attribute='review_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Observaciones</span><select data-filter-key="attention"><option value="">Todas</option><option value="pending">Con observaciones abiertas</option><option value="clear">Sin observaciones abiertas</option></select></label>
+          {% if 'document.authorize' in current_permissions %}<label class="filter-field"><span>Autorización</span><select data-filter-key="authorization"><option value="">Todos los estados</option>{% for value in versions|map(attribute='authorization_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>{% endif %}
+          {% if 'document.sign' in current_permissions %}<label class="filter-field"><span>Firma</span><select data-filter-key="signature"><option value="">Todos los estados</option>{% for value in versions|map(attribute='signature_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>{% endif %}
+        </div>
+        <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ versions|length }} de {{ versions|length }} resultados</span><small>El historial permanece íntegro aunque una versión se oculte por el filtro.</small></div>
+      </div>
+    <div class="version-list">
+      {% for version in versions %}
+        <article id="version-{{ version.document_version_id }}" class="version-card" data-filter-item data-filter-search="versión {{ version.version_number }} {{ version.title }} {{ version.original_name or '' }} {{ version.sha256 or '' }}" data-filter-status="{{ version.lifecycle_status }}" data-filter-review="{{ version.review_status }}" data-filter-attention="{{ 'pending' if (version.open_observation_count or 0) > 0 else 'clear' }}" data-filter-authorization="{{ version.authorization_status }}" data-filter-signature="{{ version.signature_status }}">
+          <div class="card-topline">
+            <div>
+              <span class="folio">VERSIÓN {{ version.version_number }}</span>
+              <h3>{{ version.title }}</h3>
+            </div>
+            <span class="status status-{{ version.lifecycle_status }}">{{ status_labels.get(version.lifecycle_status, version.lifecycle_status|replace('_', ' ')) }}</span>
+          </div>
+          <div class="workflow-grid workflow-grid-four">
+            <div>
+              <span class="workflow-label">Revisión</span>
+              <strong>{{ status_labels.get(version.review_status, version.review_status|replace('_', ' ')) }}</strong>
+            </div>
+            <div>
+              <span class="workflow-label">Autorización</span>
+              {% if version.requires_notarial_authorization %}
+                <strong>{{ status_labels.get(version.authorization_status, version.authorization_status|replace('_', ' ')) }}</strong>
+              {% else %}
+                <strong class="not-required">No requerida</strong>
+              {% endif %}
+            </div>
+            <div>
+              <span class="workflow-label">Certificación</span>
+              {% if version.requires_certification %}
+                <strong>{{ status_labels.get(version.certification_status, version.certification_status|replace('_', ' ')) }}</strong>
+              {% else %}
+                <strong class="not-required">No requerida</strong>
+              {% endif %}
+            </div>
+            <div>
+              <span class="workflow-label">Firma de integridad</span>
+              {% if version.requires_judicial_signature %}
+                <strong>{{ status_labels.get(version.signature_status, version.signature_status|replace('_', ' ')) }}</strong>
+              {% else %}
+                <strong class="not-required">No requerida</strong>
+              {% endif %}
+            </div>
+          </div>
+          {% if version.open_observation_count %}
+            <p class="workflow-warning">{{ version.open_observation_count }} observación(es) deben resolverse antes de aprobar o firmar.</p>
+          {% endif %}
+          <div class="version-storage-line">
+            <span>
+              <small>Almacenamiento</small>
+              <strong>{{ version.storage_provider|ui_label('provider') if version.storage_provider else "Sin proveedor" }} - {{ version.storage_status|ui_label('status') }}</strong>
+            </span>
+            <span>
+              <small>Archivo</small>
+              <strong>{{ version.original_name or "Sin nombre" }}{% if version.size_bytes %} - {{ version.size_bytes }} bytes{% endif %}</strong>
+            </span>
+            {% if version.sha256 %}
+              <span>
+                <small>Huella SHA-256</small>
+                <code>{{ version.sha256[:16] }}...</code>
+              </span>
+            {% endif %}
+          </div>
+          {% if version.storage_provider == "minio" and version.storage_status == "available" and "document.content.read.web" in current_permissions %}
+            <div class="version-actions">
+              <button
+                class="button button-outline js-preview-document"
+                type="button"
+                aria-controls="document-viewer"
+                data-preview-url="{{ url_for('document_content', document_id=document.id, version_id=version.document_version_id) }}"
+                data-content-type="{{ version.content_type or 'application/octet-stream' }}"
+                data-file-name="{{ version.original_name or version.title }}"
+                data-version-number="{{ version.version_number }}"
+                {% if "document.download.web" in current_permissions %}data-download-url="{{ url_for('document_content', document_id=document.id, version_id=version.document_version_id, download=1) }}"{% endif %}
+              >Ver en esta página</button>
+            </div>
+          {% endif %}
+          {% if "document.observation.create" in current_permissions %}
+            <details class="observation-compose">
+              <summary>Emitir observación sobre esta versión</summary>
+              <form class="observation-form" method="post" action="{{ url_for('create_document_observation', document_id=document.id, version_id=version.document_version_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>
+                  <span>Tipo de observación</span>
+                  <select name="observation_type" required>
+                    {% for code, label in observation_type_labels.items() %}
+                      <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  <span>Detalle</span>
+                  <textarea name="body" minlength="5" maxlength="3000" rows="4" required placeholder="Describe con precisión lo que debe revisarse o corregirse."></textarea>
+                </label>
+                <button class="button button-primary" type="submit">Registrar observación</button>
+              </form>
+            </details>
+          {% endif %}
+
+          {% if "document.review" in current_permissions and document.lifecycle_status == "active" %}
+            <details class="workflow-action-compose">
+              <summary>Registrar revisión</summary>
+              <form class="observation-form" method="post" action="{{ url_for('record_document_action', document_id=document.id, version_id=version.document_version_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action_code" value="review">
+                <label><span>Resultado</span><select name="outcome" required><option value="approved">Aprobar revisión</option><option value="returned">Devolver para corrección</option><option value="rejected">Rechazar</option></select></label>
+                <label><span>Justificación</span><textarea name="note" minlength="5" maxlength="2000" rows="3" required></textarea></label>
+                <button class="button button-primary" type="submit">Guardar revisión</button>
+              </form>
+            </details>
+          {% endif %}
+
+          {% if "document.authorize" in current_permissions and version.requires_notarial_authorization and version.authorization_status != "approved" %}
+            <details class="workflow-action-compose">
+              <summary>Autorizar versión</summary>
+              <form class="observation-form" method="post" action="{{ url_for('record_document_action', document_id=document.id, version_id=version.document_version_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action_code" value="authorize">
+                <label><span>Resultado</span><select name="outcome" required><option value="approved">Autorizar</option><option value="returned">Devolver</option><option value="rejected">Rechazar</option></select></label>
+                <label><span>Justificación</span><textarea name="note" minlength="5" maxlength="2000" rows="3" required></textarea></label>
+                <button class="button button-primary" type="submit">Registrar autorización</button>
+              </form>
+            </details>
+          {% endif %}
+
+          {% if "document.sign" in current_permissions and version.allows_platform_signature and version.signature_status != "signed" %}
+            <details class="workflow-action-compose signature-compose">
+              <summary>Firmar integridad de la versión</summary>
+              <form class="observation-form" method="post" action="{{ url_for('sign_document_version', document_id=document.id, version_id=version.document_version_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="confirmation-field"><input type="checkbox" name="confirmation" value="yes" required><span>Confirmo que revisé esta versión y deseo registrar una constancia de integridad ligada a mi sesión.</span></label>
+                <p class="viewer-security-note">Esta constancia usa la huella SHA-256 del original. No sustituye por sí sola un certificado electrónico cualificado.</p>
+                <button class="button button-primary" type="submit">Firmar versión</button>
+              </form>
+            </details>
+          {% endif %}
+
+          {% if "document.certify" in current_permissions and version.requires_certification and version.certification_status != "approved" %}
+            <details class="workflow-action-compose">
+              <summary>Certificar versión</summary>
+              <form class="observation-form" method="post" action="{{ url_for('record_document_action', document_id=document.id, version_id=version.document_version_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action_code" value="certify">
+                <label><span>Resultado</span><select name="outcome" required><option value="approved">Certificar</option><option value="returned">Devolver</option><option value="rejected">Rechazar</option></select></label>
+                <label><span>Justificación</span><textarea name="note" minlength="5" maxlength="2000" rows="3" required></textarea></label>
+                <button class="button button-primary" type="submit">Registrar certificación</button>
+              </form>
+            </details>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+      <div class="filter-empty-state" data-filter-empty hidden>No hay versiones que coincidan con los filtros.</div>
+    </section>
+  {% else %}
+    <div class="empty-state">
+      <h3>No hay versiones registradas</h3>
+      <p>El servicio central no devolvió versiones autorizadas para este documento.</p>
+    </div>
+  {% endif %}
+
+  {% if workflow_actions or signatures %}
+    <section class="section-heading">
+      <div><h2>Historial de control</h2><p>Revisiones, autorizaciones, certificaciones y firmas se agregan sin sobrescribir registros previos.</p></div>
+      {% set event_count = (workflow_actions|length) + (signatures|length) %}
+      <span class="count-badge">{{ event_count }} {{ 'evento' if event_count == 1 else 'eventos' }}</span>
+    </section>
+    <div class="workflow-history-list">
+      {% for action in workflow_actions %}
+        <article class="workflow-history-row">
+          <span class="folio">VERSIÓN {{ action.version_number }} - {{ action.action_code|ui_label('workflow_action')|upper }}</span>
+          <div><strong>{{ action.actor_name }}</strong><p>{{ action.note }}</p><small>{{ action.actor_role_code|ui_label('role') }} - {{ action.created_at }}</small></div>
+          <span class="status status-{{ action.outcome }}">{{ status_labels.get(action.outcome, action.outcome) }}</span>
+        </article>
+      {% endfor %}
+      {% for signature in signatures %}
+        <article class="workflow-history-row">
+          <span class="folio">VERSIÓN {{ signature.version_number }} - FIRMA</span>
+          <div><strong>{{ signature.signer_name or "Firmante externo" }}</strong><p>Huella firmada: <code>{{ signature.signed_digest[:16] }}...</code></p><small>Algoritmo {{ signature.algorithm }} - {{ signature.signed_at or signature.recorded_at }}</small></div>
+          <span class="status status-{{ signature.verification_status }}">{{ status_labels.get(signature.verification_status, signature.verification_status) }}</span>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <section id="observations" class="section-heading observation-heading">
+    <div>
+      <h2>Observaciones y respuestas</h2>
+      <p>El intercambio queda vinculado a la versión revisada y permanece en el historial.</p>
+    </div>
+    <span class="count-badge">{{ observations|length }} {{ 'observación' if observations|length == 1 else 'observaciones' }}</span>
+  </section>
+
+  {% if observations %}
+    <section data-filter-scope aria-label="Filtrar observaciones del documento">
+      <div class="filter-panel">
+        <div class="filter-panel-heading"><div><strong>Filtrar observaciones</strong><small>Localiza intercambios por versión, autor, tipo o estado.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+        <div class="filter-controls">
+          <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Versión, autor o contenido"></label>
+          <label class="filter-field"><span>Estado</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in observations|map(attribute='observation_status')|select|unique|sort %}<option value="{{ value }}">{{ observation_status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Tipo</span><select data-filter-key="type"><option value="">Todos los tipos</option>{% for value in observations|map(attribute='observation_type')|select|unique|sort %}<option value="{{ value }}">{{ observation_type_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+        </div>
+        <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ observations|length }} de {{ observations|length }} resultados</span><small>Filtrar no resuelve ni retira observaciones.</small></div>
+      </div>
+    <div class="observation-list">
+      {% for observation in observations %}
+        <article class="observation-card" data-filter-item data-filter-search="versión {{ observation.version_number }} {{ observation.author_name }} {{ observation.body }} {% for answer in observation.responses %}{{ answer.responder_name }} {{ answer.body }} {% endfor %}" data-filter-status="{{ observation.observation_status }}" data-filter-type="{{ observation.observation_type }}">
+          <div class="card-topline">
+            <div>
+              <span class="folio">VERSIÓN {{ observation.version_number }} - {{ observation_type_labels.get(observation.observation_type, observation.observation_type|replace('_', ' ')) }}</span>
+              <h3>{{ observation.author_name }}</h3>
+              <small>{{ observation.created_at }}</small>
+            </div>
+            <span class="status status-{{ observation.observation_status }}">{{ observation_status_labels.get(observation.observation_status, observation.observation_status) }}</span>
+          </div>
+          <p class="observation-body">{{ observation.body }}</p>
+
+          {% if observation.responses %}
+            <div class="observation-thread">
+              {% for answer in observation.responses %}
+                <div class="observation-response">
+                  <div>
+                    <strong>{{ answer.responder_name }}</strong>
+                    <small>{{ answer.created_at }}</small>
+                  </div>
+                  <p>{{ answer.body }}</p>
+                  {% if answer.referenced_version_number %}
+                    <span class="response-version">Respuesta respaldada por la versión {{ answer.referenced_version_number }}</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if observation.observation_status == "resolved" %}
+            <div class="resolution-note">
+              <strong>Resolución: {{ observation.resolved_by_name }}</strong>
+              <p>{{ observation.resolution_note }}</p>
+              <small>{{ observation.resolved_at }}</small>
+            </div>
+          {% endif %}
+
+          <div class="observation-actions">
+            {% if "document.observation.respond" in current_permissions and observation.observation_status in ["open", "responded"] %}
+              <details>
+                <summary>Responder observación</summary>
+                <form class="observation-form" method="post" action="{{ url_for('respond_document_observation', document_id=document.id, observation_id=observation.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label>
+                    <span>Respuesta</span>
+                    <textarea name="body" minlength="2" maxlength="3000" rows="4" required></textarea>
+                  </label>
+                  <label>
+                    <span>Nueva versión relacionada (opcional)</span>
+                    <select name="referenced_document_version_id">
+                      <option value="">Sin vincular una versión</option>
+                      {% for version in versions %}
+                        {% if version.version_number > observation.version_number %}
+                          <option value="{{ version.document_version_id }}">Versión {{ version.version_number }} - {{ version.original_name or version.title }}</option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <button class="button button-primary" type="submit">Guardar respuesta</button>
+                </form>
+              </details>
+            {% endif %}
+
+            {% if "document.observation.resolve" in current_permissions and observation.observation_status == "responded" %}
+              <details>
+                <summary>Resolver observación</summary>
+                <form class="observation-form" method="post" action="{{ url_for('resolve_document_observation', document_id=document.id, observation_id=observation.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label>
+                    <span>Nota de resolución</span>
+                    <textarea name="resolution_note" minlength="2" maxlength="2000" rows="3" required></textarea>
+                  </label>
+                  <button class="button button-primary" type="submit">Marcar como resuelta</button>
+                </form>
+              </details>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+      <div class="filter-empty-state" data-filter-empty hidden>No hay observaciones que coincidan con los filtros.</div>
+    </section>
+  {% else %}
+    <div class="empty-state compact-empty">
+      <h3>Este documento no tiene observaciones</h3>
+      <p>Cuando un revisor emita una, aparecerá aquí sin modificar el archivo original.</p>
+    </div>
+  {% endif %}
+
+  {% if actions %}
+    <section class="available-actions-panel">
+      <div><span class="sidebar-eyebrow">ACCIONES SEGÚN PERMISO</span><h2>Flujo documental</h2></div>
+      <div class="capability-tags">{% for action in actions %}<span>{{ action.label }}</span>{% endfor %}</div>
+      <small>Las acciones visibles dependen de los permisos activos y del estado de cada documento.</small>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {% if versions and "document.content.read.web" in current_permissions %}
+    <script type="module" src="{{ url_for('static', filename='document-viewer.mjs') }}"></script>
+  {% endif %}
+{% endblock %}

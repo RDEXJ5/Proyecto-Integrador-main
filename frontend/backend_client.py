@@ -9,7 +9,7 @@ class BackendError(Exception):
 
 
 def _headers(auth: bool = True, web_channel: bool = False) -> dict:
-    headers = {"X-API-Key": current_app.config["API_APPLICATION_KEY"]}
+    headers = {"X-API-Key": current_app.config["API_APPLICATION_KEY"], "X-Client-Channel": "web"}
     if auth and session.get("access_token"):
         headers["Authorization"] = f"Bearer {session['access_token']}"
     if web_channel:
@@ -101,4 +101,3 @@ def download_version(version_id: int):
     if not response.ok:
         raise BackendError(_error_message(response), response.status_code)
     return response
-

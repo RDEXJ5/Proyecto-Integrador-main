@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Despacho judicial · Expediente Íntegro{% endblock %}
+{% block content %}
+<section class="role-hero judge-hero">
+  <div>
+    <p class="eyebrow">Vista judicial · Web</p>
+    <h1>Despacho judicial</h1>
+    <p>Consulta únicamente expedientes activos, revisa el historial inmutable y firma versiones que ya fueron autorizadas por notaría.</p>
+  </div>
+  <div class="role-chip">Juez · casos activos</div>
+</section>
+
+<section class="metric-grid">
+  <article class="metric-card"><span>Expedientes activos</span><strong>{{ cases|length }}</strong><small>Visibles para resolución</small></article>
+  <article class="metric-card"><span>Documentos consultables</span><strong>{{ documents|length }}</strong><small>Sin acceso a expedientes pausados</small></article>
+  <article class="metric-card"><span>Acción judicial</span><strong>Firma</strong><small>Después de autorización notarial</small></article>
+</section>
+
+<section class="grid two workspace-grid">
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Bandeja de expedientes</p><h2>Activos para consulta</h2></div><span>{{ cases|length }}</span></div>
+    {% for case in cases %}
+      <a class="case-row action-row" href="{{ url_for('case_detail', case_id=case.id) }}"><div><strong>{{ case.folio }}</strong><span>{{ case.title }}</span><small>Consultar documentos y versiones</small></div><span class="status {{ case.status }}">{{ case.status }}</span></a>
+    {% else %}<p class="empty">No hay expedientes activos asignados a esta vista.</p>{% endfor %}
+  </article>
+  <article class="panel">
+    <div class="section-title"><div><p class="eyebrow">Integridad documental</p><h2>Versiones por revisar</h2></div><span>{{ documents|length }}</span></div>
+    {% for document in documents[:7] %}
+      <a class="case-row action-row" href="{{ url_for('document_detail', document_id=document.id) }}"><div><strong>{{ document.title }}</strong><span>{{ document.kind }} · expediente {{ document.case_id }}</span><small>Ver historial, autorización y opción de firma</small></div>{% if document.contains_sensitive_data %}<span class="sensitive">sensible</span>{% endif %}</a>
+    {% else %}<p class="empty">No hay documentos disponibles para firma.</p>{% endfor %}
+  </article>
+</section>
+{% endblock %}

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
@@ -5,8 +7,15 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.deps import verify_application_key
+from app.db_migrations import apply_document_type_policy_migration
 from app.rate_limit import limiter
 from app.routers import audit, auth, cases, documents, users
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    apply_document_type_policy_migration()
+    yield
 
 
 app = FastAPI(
@@ -17,6 +26,7 @@ app = FastAPI(
     ),
     version="2.0.0",
     root_path="/api",
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

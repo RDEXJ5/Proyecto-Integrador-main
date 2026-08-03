@@ -1,0 +1,9 @@
+{
+  "name": "sistema-expedientes-web-assets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependencias del visor documental web.",
+  "dependencies": {
+    "pdfjs-dist": "5.7.284"
+  }
+}

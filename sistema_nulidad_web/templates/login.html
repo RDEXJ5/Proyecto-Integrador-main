@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión - Expediente Íntegro{% endblock %}
+{% block content %}
+  <section class="login-layout">
+    <aside class="login-presentation" aria-label="Características de la plataforma">
+      <div class="login-presentation-content">
+        <span class="login-kicker">PLATAFORMA JURÍDICA INTEGRAL</span>
+        <h1>Todo el expediente, con trazabilidad desde el primer archivo.</h1>
+        <p>Gestiona asuntos de distintas materias en un entorno diseñado para conservar documentos, decisiones y responsabilidades sin perder el historial.</p>
+
+        <div class="login-feature-grid">
+          <article>
+            <span aria-hidden="true">01</span>
+            <div><strong>Acceso por perfil</strong><small>Cada persona entra únicamente al espacio y a los casos que le fueron asignados.</small></div>
+          </article>
+          <article>
+            <span aria-hidden="true">02</span>
+            <div><strong>Versiones inmutables</strong><small>Las correcciones crean versiones nuevas; el original y su huella permanecen disponibles.</small></div>
+          </article>
+          <article>
+            <span aria-hidden="true">03</span>
+            <div><strong>Revisión verificable</strong><small>Observaciones, firmas, decisiones y cambios de estado quedan vinculados con su responsable.</small></div>
+          </article>
+        </div>
+
+        <div class="login-trust-line">
+          <span class="login-trust-mark" aria-hidden="true">OK</span>
+          <p><strong>Conservación permanente</strong><small>La baja es lógica: ningún expediente, usuario, documento o historial se elimina físicamente.</small></p>
+        </div>
+      </div>
+    </aside>
+
+    <div class="login-card">
+      <span class="portal-badge">PORTAL WEB SEGURO</span>
+      <h1>Bienvenido</h1>
+      <p class="login-subtitle">Accede al espacio de trabajo correspondiente a tus responsabilidades dentro del sistema documental.</p>
+      <div class="info-card login-info">
+        <strong>Interfaz basada en capacidades</strong>
+        <p>Carga, revisión, gestión procesal, auditoría y administración técnica se mantienen separados.</p>
+      </div>
+      <form method="post" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="email">Correo electrónico</label>
+        <input id="email" name="email" type="email" value="{{ email }}" autocomplete="username" maxlength="254" required autofocus>
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+        <button class="button button-primary button-block" type="submit">Iniciar sesión</button>
+      </form>
+      <p class="login-hint">Las partes y los testigos deben utilizar la aplicación móvil para consultar o aportar información personal.</p>
+      <p class="security-note">La sesión permanece protegida y no expone tus datos de acceso a otros sitios.</p>
+    </div>
+  </section>
+{% endblock %}

@@ -11,9 +11,9 @@
     <a class="brand" href="{{ url_for('dashboard') if current_user else url_for('login') }}">Expediente Íntegro</a>
     {% if current_user %}
       <nav>
-        <a href="{{ url_for('dashboard') }}">Expedientes</a>
+        <a href="{{ url_for('dashboard') }}">{% if current_user.role == 'judge' %}Despacho judicial{% elif current_user.role == 'notary' %}Control notarial{% elif current_user.role == 'lawyer' %}Mis expedientes{% else %}Expedientes{% endif %}</a>
         {% if current_user.role in ['admin', 'notary', 'lawyer'] %}<a href="{{ url_for('create_case') }}">Nuevo expediente</a>{% endif %}
-        <a href="{{ url_for('create_document') }}">Registrar documento</a>
+        {% if current_user.role in ['admin', 'notary', 'lawyer'] %}<a href="{{ url_for('create_document') }}">Registrar documento</a>{% endif %}
         <form method="post" action="{{ url_for('logout') }}" class="inline-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="link-button">Salir · {{ current_user.full_name }}</button>
@@ -29,4 +29,3 @@
   </main>
 </body>
 </html>
-

@@ -1,0 +1,31 @@
+{
+  "name": "sistema-nulidad-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "start:mobile": "node src/mobile-server.js",
+    "dev": "node --watch src/server.js",
+    "dev:mobile": "node --watch src/mobile-server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/mobile-server.js && node --check src/mobile-app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "file-type": "22.0.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "minio": "8.0.7",
+    "multer": "2.2.0",
+    "mysql2": "^3.14.3",
+    "swagger-ui-express": "^5.0.1"
+  }
+}

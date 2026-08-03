@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Perfil de usuario - Expediente Íntegro{% endblock %}
+{% block content %}
+  <a class="back-link" href="{{ url_for('workspace_section', workspace_code='administration', section_code='users') }}">Volver al registro de usuarios</a>
+
+  <section class="profile-hero administration-profile-hero">
+    <div class="profile-avatar" aria-hidden="true">{{ user_profile.full_name[:1]|upper }}</div>
+    <div>
+      <span class="portal-badge">PERFIL DE USUARIO</span>
+      <h1>{{ user_profile.full_name }}</h1>
+      <p>{{ user_profile.email }}</p>
+      <div class="role-chip-row" aria-label="Estado y roles activos">
+        <span class="status status-{{ user_profile.account_status }}">{{ user_profile.account_status|ui_label('status') }}</span>
+        {% for role in active_roles %}<span class="role-chip">{{ role.label }}</span>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="record-summary administration-user-summary">
+    <div><span>Identificador</span><strong>{{ user_profile.id }}</strong></div>
+    <div><span>Estado de la cuenta</span><strong>{{ user_profile.account_status|ui_label('status') }}</strong></div>
+    <div><span>Fecha de registro</span><strong>{{ user_profile.created_at }}</strong></div>
+    <div><span>Última actualización</span><strong>{{ user_profile.updated_at }}</strong></div>
+  </section>
+
+  <section class="context-panel administration-privacy-note">
+    {{ icon('shield') }}
+    <div>
+      <strong>Vista técnica de identidad</strong>
+      <p>Esta ficha muestra configuración de la cuenta, roles, permisos y membresías. No expone contraseñas, documentos ni contenido jurídico.</p>
+    </div>
+  </section>
+
+  <details class="creation-disclosure administration-password-disclosure">
+    <summary class="button button-primary">{{ icon('settings') }}<span>Actualizar contraseña</span></summary>
+    <section class="document-upload-panel">
+      <div class="upload-panel-heading"><div><span class="sidebar-eyebrow">CREDENCIAL PROTEGIDA</span><h2>Cambiar contraseña</h2><p>La contraseña se almacena con bcrypt y nunca se incluye en la bitácora.</p></div></div>
+      <form class="document-form" method="post" action="{{ url_for('change_administration_user_password', user_id=user_profile.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label><span>Nueva contraseña</span><input name="password" type="password" minlength="4" maxlength="200" autocomplete="new-password" required></label>
+        <label><span>Motivo</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+        <button class="button button-primary" type="submit">Guardar nueva contraseña</button>
+      </form>
+    </section>
+  </details>
+
+  <div class="profile-grid administration-detail-grid">
+    <section class="profile-panel">
+      <div class="section-heading section-heading-top">
+        <div><h2>Roles activos</h2><p>Funciones vigentes y medio desde el que puede ingresar la persona.</p></div>
+        <span class="count-badge">{{ active_roles|length }} activos</span>
+      </div>
+      {% if active_roles %}
+        <div class="administration-role-list">
+          {% for role in active_roles %}
+            <article>
+              <div><strong>{{ role.label }}</strong><span>{{ role.channel|ui_label('channel') }}</span></div>
+              <p>{{ role.description }}</p>
+              <small>Concedido por {{ role.granted_by_name or 'el sistema' }} el {{ role.granted_at }}.</small>
+              <small>Motivo: {{ role.grant_reason }}</small>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state compact-empty"><h3>Sin roles activos</h3><p>La cuenta no puede acceder a un espacio hasta recibir un rol.</p></div>
+      {% endif %}
+    </section>
+
+    <section class="profile-panel">
+      <div class="section-heading section-heading-top">
+        <div><h2>Membresías organizativas</h2><p>Unidades en las que participa la cuenta y estado de cada vínculo.</p></div>
+        <span class="count-badge">{{ unit_memberships|length }} registros</span>
+      </div>
+      {% if unit_memberships %}
+        <div class="administration-role-list">
+          {% for membership in unit_memberships %}
+            <article>
+              <div><strong>{{ membership.unit_name }}</strong><span class="status status-{{ membership.membership_status }}">{{ membership.membership_status|ui_label('status') }}</span></div>
+              <p>{{ membership.unit_type|ui_label('unit_type') }} - {{ membership.membership_type|ui_label('membership') }}</p>
+              <small>{{ membership.membership_reason }}</small>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state compact-empty"><h3>Sin unidad asignada</h3><p>Este perfil no tiene una membresía organizativa registrada.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="profile-panel permissions-panel">
+    <div class="section-heading section-heading-top">
+      <div><h2>Funciones habilitadas</h2><p>Permisos resultantes de todos los roles activos.</p></div>
+      <span class="count-badge">{{ profile_permissions|length }} funciones</span>
+    </div>
+    {% if profile_permissions %}
+      <div class="profile-permission-grid">
+        {% for permission in profile_permissions %}<span>{{ permission.description }}</span>{% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state compact-empty"><h3>Sin funciones habilitadas</h3><p>La cuenta requiere un rol activo con permisos.</p></div>
+    {% endif %}
+  </section>
+
+  <div class="profile-grid administration-history-grid">
+    <section class="profile-panel">
+      <div class="section-heading section-heading-top">
+        <div><h2>Historial de roles</h2><p>Concesiones y revocaciones conservadas permanentemente.</p></div>
+      </div>
+      {% if role_history %}
+        <div class="timeline-list">
+          {% for grant in role_history %}
+            <div>
+              <strong>{{ grant.role_label }} - {{ grant.grant_status|ui_label('status') }}</strong>
+              <small>Concedido por {{ grant.granted_by_name or 'el sistema' }} el {{ grant.granted_at }}</small>
+              <p>{{ grant.grant_reason }}</p>
+              {% if grant.revoked_at %}<small>Revocado por {{ grant.revoked_by_name or 'el sistema' }} el {{ grant.revoked_at }}: {{ grant.revocation_reason }}</small>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="people-empty">No hay historial de roles.</p>
+      {% endif %}
+    </section>
+
+    <section class="profile-panel">
+      <div class="section-heading section-heading-top">
+        <div><h2>Historial de estado</h2><p>Cambios lógicos realizados sobre la cuenta.</p></div>
+      </div>
+      {% if status_history %}
+        <div class="timeline-list">
+          {% for change in status_history %}
+            <div>
+              <strong>{{ change.previous_status|ui_label('status') }} → {{ change.new_status|ui_label('status') }}</strong>
+              <small>{{ change.changed_by_name }} - {{ change.changed_at }}</small>
+              <p>{{ change.reason }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="people-empty">La cuenta no tiene cambios de estado registrados.</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

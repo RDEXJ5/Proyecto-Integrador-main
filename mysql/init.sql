@@ -46,15 +46,49 @@ CREATE TABLE IF NOT EXISTS case_participants (
     CONSTRAINT uq_case_participant UNIQUE (case_id, user_id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS document_types (
+    code VARCHAR(64) PRIMARY KEY,
+    label VARCHAR(120) NOT NULL,
+    description VARCHAR(500) NULL,
+    requires_notarial_authorization BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_judicial_signature BOOLEAN NOT NULL DEFAULT FALSE,
+    default_sensitive BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_signature_requires_authorization
+        CHECK (NOT requires_judicial_signature OR requires_notarial_authorization)
+) ENGINE=InnoDB;
+
+INSERT INTO document_types (
+    code, label, description, requires_notarial_authorization,
+    requires_judicial_signature, default_sensitive
+) VALUES
+    ('marriage_certificate', 'Acta matrimonial', 'Documento rector del expediente de nulidad.', TRUE, FALSE, TRUE),
+    ('personal_identification', 'Identificación oficial', 'INE o documento oficial de la parte interesada.', TRUE, FALSE, TRUE),
+    ('curp', 'CURP', 'Clave Única de Registro de Población.', TRUE, FALSE, TRUE),
+    ('birth_certificate', 'Acta de nacimiento', 'Acta de nacimiento de una parte interesada.', TRUE, FALSE, TRUE),
+    ('rfc', 'RFC', 'Constancia de Registro Federal de Contribuyentes.', TRUE, FALSE, TRUE),
+    ('proof_of_address', 'Comprobante de domicilio', 'Documento de domicilio de una parte interesada.', TRUE, FALSE, TRUE),
+    ('witness_identification', 'Identificación de testigo', 'Identificación oficial del testigo.', TRUE, FALSE, TRUE),
+    ('libel', 'Libelo', 'Relato de hechos presentado por una parte o testigo.', FALSE, FALSE, TRUE),
+    ('judgment', 'Resolución judicial', 'Resolución que requiere autorización notarial y firma judicial.', TRUE, TRUE, TRUE),
+    ('other', 'Anexo u otro documento', 'Documento complementario sin firma judicial obligatoria.', FALSE, FALSE, TRUE)
+ON DUPLICATE KEY UPDATE
+    label = VALUES(label),
+    description = VALUES(description),
+    requires_notarial_authorization = VALUES(requires_notarial_authorization),
+    requires_judicial_signature = VALUES(requires_judicial_signature),
+    default_sensitive = VALUES(default_sensitive),
+    is_active = TRUE;
+
 CREATE TABLE IF NOT EXISTS documents (
     id INT AUTO_INCREMENT PRIMARY KEY,
     case_id INT NOT NULL,
     owner_id INT NOT NULL,
-    kind ENUM(
-        'marriage_certificate', 'personal_identification', 'curp',
-        'birth_certificate', 'rfc', 'proof_of_address',
-        'witness_identification', 'libel', 'judgment', 'other'
-    ) NOT NULL,
+    kind VARCHAR(64) NOT NULL,
+    requires_notarial_authorization BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_judicial_signature BOOLEAN NOT NULL DEFAULT FALSE,
     title VARCHAR(255) NOT NULL,
     description TEXT NULL,
     contains_sensitive_data BOOLEAN NOT NULL DEFAULT TRUE,
@@ -63,6 +97,7 @@ CREATE TABLE IF NOT EXISTS documents (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_document_case FOREIGN KEY (case_id) REFERENCES cases(id),
     CONSTRAINT fk_document_owner FOREIGN KEY (owner_id) REFERENCES users(id),
+    CONSTRAINT fk_document_type FOREIGN KEY (kind) REFERENCES document_types(code),
     INDEX idx_documents_case (case_id)
 ) ENGINE=InnoDB;
 
@@ -109,6 +144,7 @@ CREATE TABLE IF NOT EXISTS document_signatures (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_signature_version FOREIGN KEY (version_id) REFERENCES document_versions(id),
     CONSTRAINT fk_signature_user FOREIGN KEY (signer_id) REFERENCES users(id),
+    UNIQUE KEY uq_signature_version (version_id),
     INDEX idx_signatures_version (version_id)
 ) ENGINE=InnoDB;
 
@@ -144,6 +180,10 @@ END//
 CREATE TRIGGER prevent_document_delete BEFORE DELETE ON documents
 FOR EACH ROW BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Permanent retention: documents cannot be deleted';
+END//
+CREATE TRIGGER prevent_document_type_delete BEFORE DELETE ON document_types
+FOR EACH ROW BEGIN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Permanent retention: document types cannot be deleted';
 END//
 CREATE TRIGGER prevent_version_delete BEFORE DELETE ON document_versions
 FOR EACH ROW BEGIN

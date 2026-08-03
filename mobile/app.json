@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Expediente Íntegro",
+    "slug": "expediente-integro-mobile",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-secure-store",
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Expediente Íntegro necesita acceso para seleccionar documentos personales.",
+          "cameraPermission": "Expediente Íntegro necesita la cámara para capturar documentos personales.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "android": {
+      "package": "mx.expedienteintegro.mobile",
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "ios": {
+      "bundleIdentifier": "mx.expedienteintegro.mobile"
+    }
+  }
+}

@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}{{ case.folio }} - Expediente Íntegro{% endblock %}
+{% block content %}
+  <a class="back-link" href="{{ url_for('workspace_dashboard', workspace_code=active_workspace.code) }}">Volver al espacio de trabajo</a>
+
+  <section class="detail-heading">
+    <div>
+      <span class="folio">{{ case.folio }}</span>
+      <h1>{{ case.title }}</h1>
+      <p>{{ case.description or "Expediente documental protegido por permisos y asignaciones." }}</p>
+    </div>
+    <span class="status status-{{ case.status }}">{{ status_labels.get(case.status, case.status|replace('_', ' ')) }}</span>
+  </section>
+
+  <section class="record-summary">
+    <div><span>Espacio actual</span><strong>{{ active_workspace.label }}</strong></div>
+    <div><span>Apertura</span><strong>{{ case.opened_at or "Sin fecha" }}</strong></div>
+    <div><span>Última actualización</span><strong>{{ case.updated_at or "Sin fecha" }}</strong></div>
+    <div><span>Conservación</span><strong>Historial permanente</strong></div>
+    <div><span>Materia</span><strong>{{ case.legal_area_label }}</strong></div>
+    <div><span>Tipo de asunto</span><strong>{{ case.case_type_label }}</strong></div>
+    <div><span>Etapa actual</span><strong>{{ case.current_stage_label or case.current_stage_code|ui_label('stage') if case.current_stage_code else "Sin etapa" }}</strong></div>
+    <div><span>Unidad</span><strong>{{ case.organizational_unit_name }}</strong></div>
+  </section>
+
+  <section class="context-panel">
+    {% if active_workspace.code == "review" %}
+      <strong>Revisión y decisión</strong>
+      <p>Analiza las versiones y aplica solamente las decisiones autorizadas para tu perfil.</p>
+    {% elif active_workspace.code == "contribution" %}
+      <strong>Carga y seguimiento</strong>
+      <p>Consulta estados, responde observaciones y agrega versiones sin sobrescribir las anteriores.</p>
+    {% elif active_workspace.code == "process" %}
+      <strong>Gestión procesal</strong>
+      <p>Clasifica el asunto y controla responsables, etapas y plazos sin eliminar registros.</p>
+    {% elif active_workspace.code == "audit" %}
+      <strong>Consulta histórica de solo lectura</strong>
+      <p>Todos los accesos y cambios relacionados con el expediente deben permanecer trazables.</p>
+    {% endif %}
+  </section>
+
+  {% if "case.people.read" in current_permissions %}
+    <section class="section-heading people-heading">
+      <div>
+        <h2>Personas involucradas</h2>
+        <p>Se muestran únicamente responsables y participantes activos de este expediente.</p>
+      </div>
+      <span class="count-badge">{{ (people.professionals|length) + (people.participants|length) }} personas</span>
+    </section>
+
+    <div class="people-groups">
+      <section class="people-panel">
+        <div class="people-panel-heading">
+          <h3>Equipo profesional</h3>
+          <span>{{ people.professionals|length }}</span>
+        </div>
+        {% if people.professionals %}
+          <div class="people-list">
+            {% for person in people.professionals %}
+              <article class="person-row">
+                <span class="person-initial">{{ person.full_name[:1]|upper }}</span>
+                <div>
+                  <strong>{{ person.full_name }}</strong>
+                  <small>{{ person.assignment_type_label }} - alcance {{ person.assignment_scope|ui_label('scope') }}</small>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="people-empty">No hay responsables activos registrados.</p>
+        {% endif %}
+      </section>
+
+      <section class="people-panel">
+        <div class="people-panel-heading">
+          <h3>Partes y otros participantes</h3>
+          <span>{{ people.participants|length }}</span>
+        </div>
+        {% if people.participants %}
+          <div class="people-list">
+            {% for person in people.participants %}
+              <article class="person-row">
+                <span class="person-initial">{{ person.full_name[:1]|upper }}</span>
+                <div>
+                  <strong>{{ person.full_name }}</strong>
+                  <small>{{ person.participant_role_label }}</small>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="people-empty">No hay participantes activos registrados.</p>
+        {% endif %}
+      </section>
+    </div>
+  {% endif %}
+
+  {% if active_workspace.code == "process" %}
+    {% set assignment_candidates = process_catalogs.assignmentCandidates or [] %}
+    {% set participant_candidates = process_catalogs.participantCandidates or [] %}
+    <section id="process-management" class="section-heading">
+      <div><h2>Gestión procesal</h2><p>Asignaciones, etapas, plazos y estados se administran mediante baja lógica e historial permanente.</p></div>
+    </section>
+
+    <div class="process-grid">
+      <section class="people-panel">
+        <div class="people-panel-heading"><h3>Responsables</h3><span>{{ process_data.assignments|length }}</span></div>
+        {% if process_data.assignments %}
+          <div class="people-list">
+            {% for assignment in process_data.assignments %}
+              <article class="person-row">
+                <span class="person-initial">{{ assignment.full_name[:1]|upper }}</span>
+                <div>
+                  <strong>{{ assignment.full_name }}</strong>
+                  <small>{{ assignment.assignment_type_label }} - {{ assignment.assignment_scope|ui_label('scope') }} - {{ assignment.assignment_status|ui_label('status') }}</small>
+                  {% if 'case.assign' in current_permissions and assignment.assignment_status == 'active' and assignment.user_id != current_user.id %}
+                    <details>
+                      <summary>Finalizar asignación</summary>
+                      <form class="compact-row-form" method="post" action="{{ url_for('end_case_assignment', case_id=case.id, assignment_id=assignment.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+                        <button class="button button-outline" type="submit">Finalizar</button>
+                      </form>
+                    </details>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="people-empty">No hay responsables vinculados a este expediente.</p>
+        {% endif %}
+        {% if 'case.assign' in current_permissions %}
+          {% if assignment_candidates %}
+            <details class="creation-disclosure process-action-disclosure">
+              <summary class="button button-primary">{{ icon('assignments') }}<span>Agregar responsable</span></summary>
+              <form class="observation-form creation-form" method="post" action="{{ url_for('create_case_assignment', case_id=case.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>
+                  <span>Persona y responsabilidad</span>
+                  <select name="assignment_candidate" required>
+                    <option value="">Selecciona una opción compatible</option>
+                    {% for candidate in assignment_candidates %}
+                      <option value="{{ candidate.user_id }}:{{ candidate.assignment_type_code }}">{{ candidate.full_name }} - {{ candidate.assignment_type_label }}</option>
+                    {% endfor %}
+                  </select>
+                  <small>Solo aparecen combinaciones compatibles con los roles activos y que aún no están asignadas.</small>
+                </label>
+                <label><span>Alcance</span><select name="assignment_scope" required><option value="full">Completo</option><option value="documental">Documental</option><option value="procedural">Procesal</option><option value="review">Revisión</option><option value="audit">Auditoría</option></select></label>
+                <label><span>Motivo</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+                <button class="button button-primary" type="submit">Guardar responsable</button>
+              </form>
+            </details>
+          {% else %}
+            <p class="management-empty-note">Todas las personas compatibles ya tienen una asignación activa.</p>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <section class="people-panel">
+        <div class="people-panel-heading"><h3>Participantes</h3><span>{{ process_data.participants|length }}</span></div>
+        {% if process_data.participants %}
+          <div class="people-list">
+            {% for participant in process_data.participants %}
+              <article class="person-row">
+                <span class="person-initial">{{ participant.full_name[:1]|upper }}</span>
+                <div>
+                  <strong>{{ participant.full_name }}</strong>
+                  <small>{{ participant.participant_role_label }} - {{ participant.participation_status|ui_label('status') }}</small>
+                  {% if 'case.participant.manage' in current_permissions and participant.participation_status == 'active' %}
+                    <details>
+                      <summary>Finalizar participación</summary>
+                      <form class="compact-row-form" method="post" action="{{ url_for('end_case_participant', case_id=case.id, participation_id=participant.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+                        <button class="button button-outline" type="submit">Finalizar</button>
+                      </form>
+                    </details>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="people-empty">No hay participantes vinculados a este expediente.</p>
+        {% endif %}
+        {% if process_data.invitations %}
+          <h4>Invitaciones</h4>
+          <div class="people-list">
+            {% for invitation in process_data.invitations %}
+              <article class="person-row">
+                <span class="person-initial">{{ invitation.full_name[:1]|upper }}</span>
+                <div>
+                  <strong>{{ invitation.full_name }}</strong>
+                  <small>{{ invitation.participant_role_label }} - {{ invitation.invitation_status|ui_label('status') }}</small>
+                  <small>Enviada por {{ invitation.invited_by_name }}. Vence: {{ invitation.expires_at }}</small>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% if 'case.participant.manage' in current_permissions %}
+          {% if participant_candidates %}
+            <details class="creation-disclosure process-action-disclosure">
+              <summary class="button button-primary">{{ icon('users') }}<span>Invitar participante</span></summary>
+              <form class="observation-form creation-form" method="post" action="{{ url_for('create_case_invitation', case_id=case.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>
+                  <span>Persona y calidad procesal</span>
+                  <select name="participant_candidate" required>
+                    <option value="">Selecciona una opción compatible</option>
+                    {% for candidate in participant_candidates %}
+                      <option value="{{ candidate.user_id }}:{{ candidate.participant_role_code }}">{{ candidate.full_name }} - {{ candidate.participant_role_label }}</option>
+                    {% endfor %}
+                  </select>
+                  <small>Las participaciones activas y las invitaciones pendientes no vuelven a mostrarse.</small>
+                </label>
+                <label><span>Motivo de la invitación</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+                <button class="button button-primary" type="submit">Enviar invitación</button>
+              </form>
+            </details>
+          {% else %}
+            <p class="management-empty-note">No hay personas registradas con una participación disponible para invitar.</p>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      <section class="people-panel">
+        <div class="people-panel-heading"><h3>Etapa procesal</h3><span>{{ case.current_stage_label or case.current_stage_code|ui_label('stage') if case.current_stage_code else 'Sin etapa' }}</span></div>
+        {% if 'case.stage.manage' in current_permissions and process_data.stages %}
+          <details class="creation-disclosure process-action-disclosure">
+            <summary class="button button-primary">{{ icon('stages') }}<span>Cambiar etapa</span></summary>
+            <form class="observation-form creation-form" method="post" action="{{ url_for('change_case_stage', case_id=case.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label><span>Nueva etapa</span><select name="stage_code" required><option value="">Selecciona una etapa diferente</option>{% for stage in process_data.stages %}<option value="{{ stage.stage_code }}"{% if stage.stage_code == case.current_stage_code %} disabled{% endif %}>{{ stage.sequence_number }}. {{ stage.label }}</option>{% endfor %}</select></label>
+              <label><span>Motivo</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+              <button class="button button-primary" type="submit">Registrar transición</button>
+            </form>
+          </details>
+        {% endif %}
+        <div class="timeline-list">{% for transition in process_data.stageHistory or [] %}<div><strong>{{ transition.new_stage_label or transition.new_stage_code|ui_label('stage') }}</strong><small>{{ transition.changed_by_name }} - {{ transition.changed_at }}</small><p>{{ transition.reason }}</p></div>{% endfor %}</div>
+      </section>
+    </div>
+
+    <section class="document-upload-panel">
+      <div class="upload-panel-heading"><div><span class="sidebar-eyebrow">CONTROL DE TIEMPO</span><h2>Plazos</h2></div><span class="count-badge">{{ process_data.deadlines|length }}</span></div>
+      <div class="deadline-list">{% for deadline in process_data.deadlines or [] %}<article class="deadline-row"><div><strong>{{ deadline.title }}</strong><small>Vence: {{ deadline.due_at }} - {{ deadline.assigned_user_name or 'Sin responsable' }}</small><p>{{ deadline.description or deadline.status_reason }}</p></div><span class="status status-{{ deadline.deadline_status }}">{{ deadline.deadline_status|ui_label('status') }}</span>{% if 'case.deadline.manage' in current_permissions and deadline.deadline_status == 'pending' %}<details><summary>Cerrar plazo</summary><form class="compact-row-form" method="post" action="{{ url_for('change_deadline_status', case_id=case.id, deadline_id=deadline.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><select name="status"><option value="completed">Completado</option><option value="cancelled">Cancelado</option><option value="overdue">Vencido</option></select><input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo"><button class="button button-outline" type="submit">Guardar</button></form></details>{% endif %}</article>{% endfor %}</div>
+      {% if 'case.deadline.manage' in current_permissions %}
+        <details class="creation-disclosure process-action-disclosure">
+          <summary class="button button-primary">{{ icon('deadlines') }}<span>Crear plazo</span></summary>
+          <form class="observation-form creation-form" method="post" action="{{ url_for('create_case_deadline', case_id=case.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-grid"><label><span>Título</span><input name="title" minlength="3" maxlength="200" required></label><label><span>Vencimiento</span><input name="due_at" type="datetime-local" required></label></div>
+            <label><span>Responsable</span><select name="assigned_user_id"><option value="">Sin responsable</option>{% for assignment in process_data.assignments or [] if assignment.assignment_status == 'active' %}<option value="{{ assignment.user_id }}">{{ assignment.full_name }}</option>{% endfor %}</select></label>
+            <label><span>Descripción</span><textarea name="description" maxlength="1000"></textarea></label>
+            <label><span>Motivo</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="button button-primary" type="submit">Crear plazo</button>
+          </form>
+        </details>
+      {% endif %}
+    </section>
+
+    {% if 'case.stage.manage' in current_permissions or 'case.visibility.manage' in current_permissions %}
+      <section class="context-panel state-control-panel">
+        <strong>Estado y visibilidad</strong>
+        <p>Ocultar o cerrar no elimina el expediente. Los perfiles sin privilegio histórico dejarán de verlo.</p>
+        <details class="creation-disclosure process-action-disclosure">
+          <summary class="button button-primary">{{ icon('settings') }}<span>Modificar estado</span></summary>
+          <form class="compact-row-form creation-form" method="post" action="{{ url_for('change_case_state', case_id=case.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="lifecycle_status" aria-label="Estado del expediente"><option value="draft"{% if case.status == 'draft' %} selected{% endif %}>Borrador</option><option value="active"{% if case.status == 'active' %} selected{% endif %}>Activo</option><option value="paused"{% if case.status == 'paused' %} selected{% endif %}>Pausado</option><option value="closed"{% if case.status == 'closed' %} selected{% endif %}>Cerrado</option><option value="annulled"{% if case.status == 'annulled' %} selected{% endif %}>Anulado</option><option value="archived"{% if case.status == 'archived' %} selected{% endif %}>Archivado</option></select>
+            <select name="visibility_status" aria-label="Visibilidad del expediente"><option value="visible"{% if case.visibility_status != 'hidden' %} selected{% endif %}>Visible</option>{% if 'case.visibility.manage' in current_permissions %}<option value="hidden"{% if case.visibility_status == 'hidden' %} selected{% endif %}>Oculto</option>{% endif %}</select>
+            <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+            <button class="button button-primary" type="submit">Actualizar estado</button>
+          </form>
+        </details>
+      </section>
+    {% endif %}
+  {% endif %}
+
+  {% if "decision.issue" in current_permissions and case.status == "active" %}
+    <section id="decisions" class="document-upload-panel decision-panel">
+      <div class="upload-panel-heading">
+        <div><span class="sidebar-eyebrow">DECISIÓN INMUTABLE</span><h2>Decisión procesal</h2><p>La determinación se conserva permanentemente. Si debe corregirse, se emite otra que sustituya a la anterior.</p></div>
+      </div>
+      <details class="creation-disclosure">
+        <summary class="button button-primary">+ Emitir decisión</summary>
+      <form class="document-form creation-form" method="post" action="{{ url_for('issue_case_decision', case_id=case.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <label><span>Tipo</span><select name="decision_type" required><option value="procedural_order">Acuerdo procesal</option><option value="interim_resolution">Resolución interlocutoria</option><option value="final_judgment">Sentencia final</option><option value="other">Otra determinación</option></select></label>
+          <label><span>Resultado</span><input name="outcome_code" minlength="2" maxlength="80" required placeholder="Ej. procedente, improcedente, admite prueba"></label>
+        </div>
+        <label><span>Título</span><input name="title" minlength="5" maxlength="240" required></label>
+        <label><span>Fundamentación</span><textarea name="reasoning" minlength="10" maxlength="12000" rows="6" required></textarea></label>
+        <div class="form-grid">
+          <label>
+            <span>Versión documental vinculada</span>
+            <select name="document_version_id">
+              <option value="">Sin documento vinculado</option>
+              {% for document in documents %}
+                {% if document.latest_document_version_id %}<option value="{{ document.latest_document_version_id }}">{{ document.title }} - versión {{ document.latest_version_number }}</option>{% endif %}
+              {% endfor %}
+            </select>
+            <small>Es obligatoria para una sentencia final y debe haber completado su flujo.</small>
+          </label>
+          <label>
+            <span>Sustituye a</span>
+            <select name="supersedes_decision_id">
+              <option value="">No sustituye otra decisión</option>
+              {% for decision in decisions %}
+                {% if not decision.is_superseded %}<option value="{{ decision.id }}">{{ decision.title }} - {{ decision.issued_at }}</option>{% endif %}
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="form-actions"><small>El servicio central volverá a comprobar la asignación, el estado y los requisitos documentales.</small><button class="button button-primary" type="submit">Emitir decisión</button></div>
+      </form>
+      </details>
+    </section>
+  {% endif %}
+
+  {% if decisions %}
+    <section class="section-heading">
+      <div><h2>Decisiones emitidas</h2><p>Historial cronológico sin sobrescrituras ni eliminación física.</p></div>
+      <span class="count-badge">{{ decisions|length }} {{ 'decisión' if decisions|length == 1 else 'decisiones' }}</span>
+    </section>
+    <section data-filter-scope aria-label="Filtrar decisiones">
+      <div class="filter-panel">
+        <div class="filter-panel-heading"><div><strong>Filtrar decisiones</strong><small>Consulta el historial sin alterar determinaciones vigentes o sustituidas.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+        <div class="filter-controls">
+          <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Título, resultado, fundamento o responsable"></label>
+          <label class="filter-field"><span>Tipo</span><select data-filter-key="type"><option value="">Todos los tipos</option>{% for value in decisions|map(attribute='decision_type')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('decision') }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Vigencia</span><select data-filter-key="state"><option value="">Todas</option><option value="current">Vigentes</option><option value="superseded">Sustituidas</option></select></label>
+        </div>
+        <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ decisions|length }} de {{ decisions|length }} resultados</span><small>Las decisiones permanecen en el historial.</small></div>
+      </div>
+    <div class="decision-list">
+      {% for decision in decisions %}
+        <article class="decision-card{% if decision.is_superseded %} is-superseded{% endif %}" data-filter-item data-filter-search="{{ decision.title }} {{ decision.outcome_code }} {{ decision.reasoning }} {{ decision.issued_by_name }}" data-filter-type="{{ decision.decision_type }}" data-filter-state="{{ 'superseded' if decision.is_superseded else 'current' }}">
+          <div class="card-topline"><span class="folio">{{ decision.decision_type|ui_label('decision')|upper }}</span><span class="status status-{{ 'superseded' if decision.is_superseded else 'approved' }}">{{ 'Sustituida' if decision.is_superseded else decision.outcome_code|ui_label('outcome') }}</span></div>
+          <h3>{{ decision.title }}</h3><p>{{ decision.reasoning }}</p>
+          <div class="card-footer"><span class="scope-label">{{ decision.issued_by_name }} - {{ decision.issued_at }}</span>{% if decision.document_id %}<a class="open-link" href="{{ url_for('document_detail', document_id=decision.document_id) }}">Ver documento</a>{% endif %}</div>
+        </article>
+      {% endfor %}
+    </div>
+      <div class="filter-empty-state" data-filter-empty hidden>No hay decisiones que coincidan con los filtros.</div>
+    </section>
+  {% endif %}
+
+  {% if "document.upload" in current_permissions and active_workspace.code == "contribution" %}
+    <section class="document-upload-panel">
+      <div class="upload-panel-heading">
+        <div>
+          <span class="sidebar-eyebrow">ARCHIVO EXISTENTE</span>
+          <h2>Aportación documental</h2>
+          <p>El servicio central comprobará el contenido real, aplicará la regla del tipo y creará la primera versión sin sobrescrituras.</p>
+        </div>
+        <span class="read-only-badge">PDF, JPG, PNG y DOCX</span>
+      </div>
+      <details class="creation-disclosure">
+        <summary class="button button-primary">+ Agregar documento</summary>
+      <form class="document-form creation-form" method="post" action="{{ url_for('upload_document', case_id=case.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <label>
+            <span>Tipo documental</span>
+            <select name="document_type_code" required>
+              <option value="">Selecciona un tipo</option>
+              {% for document_type in document_types %}
+                <option value="{{ document_type.code }}">
+                  {{ document_type.label }}{% if document_type.embedded_signature_policy == "required" %} - requiere firma incorporada{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Título</span>
+            <input name="title" maxlength="255" placeholder="Nombre con el que aparecerá en el expediente">
+          </label>
+        </div>
+        <label>
+          <span>Descripción</span>
+          <textarea name="description" maxlength="4000" rows="3" placeholder="Contexto breve del documento"></textarea>
+        </label>
+        <label class="file-field">
+          <span>Archivo, máximo 25 MB</span>
+          <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required>
+        </label>
+        <div class="form-actions">
+          <small>Origen registrado: archivo cargado desde la versión web.</small>
+          <button class="button button-primary" type="submit">Guardar documento</button>
+        </div>
+      </form>
+      </details>
+    </section>
+  {% endif %}
+
+  <section class="section-heading">
+    <div>
+      <h2>Documentos</h2>
+      <p>El tipo documental determina sus reglas de análisis, autorización y firma.</p>
+    </div>
+    <span class="count-badge">{{ documents|length }} registrados</span>
+  </section>
+
+  {% if documents %}
+    <section data-filter-scope aria-label="Filtrar documentos">
+      <div class="filter-panel">
+        <div class="filter-panel-heading"><div><strong>Filtrar documentos</strong><small>Consulta únicamente los documentos visibles dentro de este expediente.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+        <div class="filter-controls">
+          <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Título, descripción o tipo"></label>
+          <label class="filter-field"><span>Tipo documental</span><select data-filter-key="type"><option value="">Todos los tipos</option>{% for value in documents|map(attribute='document_type_code')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('document_type') }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Estado</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in documents|map(attribute='lifecycle_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          <label class="filter-field"><span>Protección</span><select data-filter-key="sensitivity"><option value="">Todos</option><option value="sensitive">Datos sensibles</option><option value="standard">Documento estándar</option></select></label>
+        </div>
+        <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ documents|length }} de {{ documents|length }} resultados</span><small>El tipo documental conserva sus reglas de firma y análisis.</small></div>
+      </div>
+    <div class="document-grid">
+      {% for document in documents %}
+        <article class="document-card" data-filter-item data-filter-search="{{ document.title }} {{ document.description or '' }} {{ document.document_type_code }}" data-filter-type="{{ document.document_type_code }}" data-filter-status="{{ document.lifecycle_status }}" data-filter-sensitivity="{{ 'sensitive' if document.contains_sensitive_data else 'standard' }}">
+          <div class="card-topline">
+            <span class="folio">{{ document.document_type_label or document.document_type_code|ui_label('document_type') }}</span>
+            <span class="status status-{{ document.lifecycle_status }}">{{ status_labels.get(document.lifecycle_status, document.lifecycle_status|replace('_', ' ')) }}</span>
+          </div>
+          <h3>{{ document.title }}</h3>
+          <p class="card-meta">{{ document.description or "Sin descripción" }}</p>
+          <p class="sensitive-label">{{ "Datos sensibles protegidos" if document.contains_sensitive_data else "Documento registrado" }}</p>
+          <div class="card-footer">
+            <span class="scope-label">Origen registrado por versión</span>
+            <a class="open-link" href="{{ url_for('document_detail', document_id=document.id) }}">Consultar versiones</a>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+      <div class="filter-empty-state" data-filter-empty hidden>No hay documentos que coincidan con los filtros.</div>
+    </section>
+  {% else %}
+    <div class="empty-state">
+      <h3>No hay documentos visibles</h3>
+      <p>El expediente existe, pero no contiene documentos autorizados para tu cuenta.</p>
+    </div>
+  {% endif %}
+
+  {% if actions %}
+    <section class="available-actions-panel">
+      <div><span class="sidebar-eyebrow">PERMISOS DEL ESPACIO</span><h2>Acciones previstas</h2></div>
+      <div class="capability-tags">{% for action in actions %}<span>{{ action.label }}</span>{% endfor %}</div>
+      <small>El servicio central validará cada acción antes de modificar cualquier estado.</small>
+    </section>
+  {% endif %}
+{% endblock %}

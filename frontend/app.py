@@ -12,6 +12,13 @@ from config import Config
 app = Flask(__name__)
 app.config.from_object(Config)
 
+WEB_ROLES = ("admin", "notary", "judge", "lawyer")
+ROLE_DASHBOARDS = {
+    "judge": "judge_dashboard.html",
+    "notary": "notary_dashboard.html",
+    "lawyer": "lawyer_dashboard.html",
+}
+
 
 @app.before_request
 def protect_mutating_requests():
@@ -70,6 +77,9 @@ def login():
     if request.method == "POST":
         try:
             result = api.login(request.form.get("email", ""), request.form.get("password", ""))
+            if result["user"]["role"] not in WEB_ROLES:
+                flash("Las partes y los testigos deben acceder exclusivamente desde la aplicación móvil.", "warning")
+                return render_template("login.html"), 403
             session["access_token"] = result["access_token"]
             session["user"] = result["user"]
             session["csrf_token"] = secrets.token_urlsafe(32)
@@ -96,7 +106,8 @@ def dashboard():
         if response:
             return response
         cases, documents = [], []
-    return render_template("index.html", cases=cases, documents=documents)
+    template = ROLE_DASHBOARDS.get(session["user"]["role"], "index.html")
+    return render_template(template, cases=cases, documents=documents)
 
 
 @app.route("/cases/new", methods=["GET", "POST"])
@@ -122,6 +133,7 @@ def create_case():
 
 @app.get("/cases/<int:case_id>")
 @login_required
+@allowed_roles(*WEB_ROLES)
 def case_detail(case_id: int):
     try:
         case = api.case(case_id)
@@ -134,6 +146,7 @@ def case_detail(case_id: int):
 
 @app.route("/documents/new", methods=["GET", "POST"])
 @login_required
+@allowed_roles("admin", "notary", "lawyer")
 def create_document():
     if request.method == "POST":
         upload = request.files.get("file")
@@ -161,6 +174,7 @@ def create_document():
 
 @app.get("/documents/<int:document_id>")
 @login_required
+@allowed_roles(*WEB_ROLES)
 def document_detail(document_id: int):
     try:
         document = api.request("GET", f"/documents/{document_id}")
@@ -173,6 +187,7 @@ def document_detail(document_id: int):
 
 @app.post("/documents/<int:document_id>/versions")
 @login_required
+@allowed_roles("admin", "notary", "lawyer")
 def add_version(document_id: int):
     upload = request.files.get("file")
     if not upload or not upload.filename:

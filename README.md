@@ -9,14 +9,20 @@ Plataforma para expedientes de nulidad matrimonial. Implementa el flujo:
 - Expedientes con folio y estados `active`, `paused`, `closed` y `annulled`.
 - Seis roles: administración TI, notaría, juez, abogado, parte y testigo.
 - Control de acceso por rol, asignación y propiedad de documento.
+- Catálogo de tipos documentales con política por tipo: autorización notarial,
+  firma judicial y sensibilidad por defecto. La política se copia al documento
+  al crearlo, para conservar el criterio histórico.
 - Versionado inmutable: no hay endpoint de eliminación ni reemplazo de archivo.
 - Triggers MySQL que rechazan `DELETE` sobre usuarios, expedientes, versiones,
   autorizaciones, firmas y auditoría.
 - Compresión `zlib`, cifrado Fernet en reposo y hash SHA-256 por versión.
 - Autorización notarial y firma Ed25519 verificable del digest de cada versión.
+- Estados de firma sin conflicto: `GET /api/documents/versions/{id}/signature-status`
+  devuelve `not_required` para tipos que no requieren firma judicial.
 - Bitácora de inicio de sesión, creación, autorización, firma, descarga web y cambios de estado.
-- Interfaz web para expedientes, documentos, versiones y flujo notarial/judicial.
-- App Expo enfocada a consulta y firma judicial móvil. No incluye descarga de archivos.
+- Vistas web diferenciadas para juez, notario y abogado, con acciones limitadas por rol.
+- App Expo exclusiva para partes y testigos: consulta de sus propios metadatos y
+  versiones, sin descargas ni acceso a archivos ajenos.
 - HAProxy con TLS de desarrollo, dos réplicas de API/web y monitoreo Prometheus/Grafana.
 
 La firma de integridad implementada no sustituye una firma electrónica avanzada
@@ -58,6 +64,11 @@ debe integrarse un proveedor/certificado admitido por el marco aplicable.
   permitir únicamente 80/443 y el acceso administrativo autorizado.
 - MySQL está dentro de una red Docker interna y no publica puertos al host.
 - No almacenes `.env`, certificados privados ni documentos en Git.
+- El catálogo activo de tipos puede consultarse en `GET /api/documents/types`.
+  Para cada tipo, la base registra si requiere autorización notarial o firma
+  judicial. Por defecto, solo la resolución judicial (`judgment`) requiere ambas;
+  los documentos de identidad requieren autorización y los libelos/anexos no
+  exigen firma judicial.
 - La retención permanente requiere una política institucional de archivo,
   cifrado de respaldos, control de claves y revisión legal de plazos.
 
@@ -65,7 +76,7 @@ debe integrarse un proveedor/certificado admitido por el marco aplicable.
 
 1. Crear un expediente, cargar un libelo y agregar una segunda versión.
 2. Mostrar que ambos hashes/versiones permanecen disponibles.
-3. Autorizar la versión como notario y firmarla como juez desde `mobile`.
-4. Confirmar que una parte/testigo no puede abrir documentos ajenos ni que el
-   móvil ofrece descargas.
+3. Autorizar la versión como notario y firmarla como juez desde la plataforma web.
+4. Confirmar que una parte/testigo solo ve sus propios documentos y que el
+   móvil no ofrece descargas, contenido original ni acciones judiciales.
 5. Mostrar `/api/metrics`, Prometheus, Grafana y el balanceo de HAProxy.

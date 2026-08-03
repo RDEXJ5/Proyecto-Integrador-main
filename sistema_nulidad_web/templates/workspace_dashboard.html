@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ workspace.label }} - Expediente Íntegro{% endblock %}
+{% block content %}
+  <section class="workspace-hero workspace-hero-{{ workspace.code }}">
+    <div>
+      <p class="header-eyebrow">{{ workspace.eyebrow }}</p>
+      <h1>{{ workspace.title }}</h1>
+      <p class="lead">{{ workspace.description }}</p>
+      <div class="role-chip-row" aria-label="Perfiles activos en este espacio">
+        {% for role in current_user.roles %}
+          {% if role in workspace.roles %}
+            <span class="role-chip">{{ role_labels.get(role, role) }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="hero-actions">
+        {% if workspace.sections|length > 1 %}
+          {% set primary_section = workspace.sections[1][0] %}
+          <a class="button button-hero-primary" href="{{ url_for('workspace_section', workspace_code=workspace.code, section_code=primary_section) }}">{{ icon(primary_section) }}<span>Abrir área de trabajo</span></a>
+        {% endif %}
+        <a class="button button-hero-secondary" href="{{ url_for('profile') }}">{{ icon('user') }}<span>Ver mi perfil</span></a>
+      </div>
+    </div>
+    <div class="workspace-protection">
+      <span class="protection-mark" aria-hidden="true">OK</span>
+      <strong>Acceso por permiso</strong>
+      <small>El sistema protege cada expediente y documento.</small>
+    </div>
+  </section>
+
+  {% if notice %}
+    <section class="integration-notice" role="status">
+      <strong>Interfaz preparada</strong>
+      <p>{{ notice }} La vista permanecerá sin datos simulados hasta completar esa integración.</p>
+    </section>
+  {% endif %}
+
+  <section class="metric-grid" aria-label="Resumen del espacio">
+    {% for metric in metrics %}
+      <article class="metric-card">
+        <strong>{{ metric.value }}</strong>
+        <span>{{ metric.label }}</span>
+        <small>{{ metric.detail }}</small>
+      </article>
+    {% endfor %}
+  </section>
+
+  {% if shortcuts %}
+    <section class="shortcut-section" aria-labelledby="shortcut-heading">
+      <div class="section-heading section-heading-top">
+        <div>
+          <h2 id="shortcut-heading">Accesos rápidos</h2>
+          <p>Continúa directamente en la actividad que necesitas realizar.</p>
+        </div>
+      </div>
+      <div class="shortcut-grid">
+        {% for shortcut in shortcuts %}
+          <a class="shortcut-card" href="{{ url_for('workspace_section', workspace_code=workspace.code, section_code=shortcut.section) }}">
+            <span>{{ "%02d"|format(loop.index) }}</span>
+            <div><strong>{{ shortcut.label }}</strong><small>{{ shortcut.description }}</small></div>
+            <b aria-hidden="true">›</b>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="workspace-content-grid">
+    <section class="workspace-primary">
+      <div class="section-heading section-heading-top">
+        <div>
+          <h2>{% if workspace.code in ['review', 'contribution', 'process'] %}Atención prioritaria{% elif workspace.code == 'audit' %}Actividad auditable{% else %}Estado de la plataforma{% endif %}</h2>
+          <p>{% if workspace.code in ['review', 'contribution', 'process'] %}Los asuntos activos y con pendientes aparecen primero.{% else %}La información visible depende del alcance de tu cuenta.{% endif %}</p>
+        </div>
+        {% if cases %}<span class="count-badge">{{ cases|length }} visibles</span>{% endif %}
+      </div>
+
+      {% if attention_items %}
+        <div class="case-grid case-grid-two">
+          {% for item in attention_items %}
+            {% set case = item.case %}
+            <article class="case-card attention-card{% if item.requires_attention %} requires-attention{% endif %}">
+              <div class="card-topline">
+                <span class="folio">{{ case.folio }}</span>
+                <span class="status status-{{ case.status }}">{{ status_labels.get(case.status, case.status|replace('_', ' ')) }}</span>
+              </div>
+              <h3>{{ case.title }}</h3>
+              <p class="card-meta">{{ case.legal_area_label }} - {{ case.case_type_label }}</p>
+              <div class="case-facts">
+                <span class="attention-detail">{{ item.detail }}</span>
+                <span>{{ case.document_count or 0 }} documentos</span>
+                {% if case.current_stage_code %}<span>Etapa: {{ case.current_stage_label or case.current_stage_code|ui_label('stage') }}</span>{% endif %}
+              </div>
+              <div class="card-footer">
+                <span class="scope-label">{{ case.assignment_type_label or "Acceso autorizado" }}</span>
+                <a class="open-link" href="{{ url_for('case_detail', case_id=case.id) }}">{{ item.action }}</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% elif workspace.code == 'audit' and module_data.events %}
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Elemento afectado</th></tr></thead><tbody>{% for event in module_data.events[:10] %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor_name or 'Sistema' }}</td><td>{{ event.action_code|ui_label('audit_action') }}</td><td>{{ event.resource_type|ui_label('resource') }} número {{ event.resource_id }}</td></tr>{% endfor %}</tbody></table></div>
+      {% elif workspace.code == 'administration' and health_status %}
+        <article class="system-health-card">
+          <div>
+            <span class="health-dot{% if health_status.available %} is-healthy{% endif %}" aria-hidden="true"></span>
+            <div><strong>Servicio de la aplicación: {{ health_status.api|ui_label('status') }}</strong><small>Base de datos: {{ health_status.database|ui_label('status') }}</small></div>
+          </div>
+          <a class="button button-outline" href="{{ url_for('workspace_section', workspace_code=workspace.code, section_code='health') }}">{{ icon('health') }}<span>Ver salud</span></a>
+        </article>
+      {% else %}
+        <div class="empty-state compact-empty">
+          <h3>Sin información disponible</h3>
+          <p>No se muestran datos de ejemplo. Este módulo se llenará exclusivamente con información autorizada por el servicio central.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <aside class="workspace-actions" aria-label="Capacidades del espacio">
+      <p class="sidebar-eyebrow">CAPACIDADES</p>
+      <h2>Acciones de tu perfil</h2>
+      <p class="actions-intro">La disponibilidad final se valida por permiso, asignación y estado del recurso.</p>
+      <div class="action-list">
+        {% for action in actions %}
+          <article>
+            <span>{{ "%02d"|format(loop.index) }}</span>
+            <div><strong>{{ action.label }}</strong><p>{{ action.description }}</p></div>
+          </article>
+        {% endfor %}
+      </div>
+      {% if workspace_guide %}
+        <div class="workspace-guide">
+          <p class="sidebar-eyebrow">FLUJO RECOMENDADO</p>
+          <ol>
+            {% for step in workspace_guide %}<li>{{ step }}</li>{% endfor %}
+          </ol>
+        </div>
+      {% endif %}
+    </aside>
+  </div>
+{% endblock %}

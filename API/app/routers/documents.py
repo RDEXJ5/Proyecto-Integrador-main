@@ -18,6 +18,7 @@ from app.models import (
     Document,
     DocumentAuthorization,
     DocumentSignature,
+    DocumentType,
     DocumentVersion,
     Role,
     User,
@@ -28,7 +29,9 @@ from app.schemas import (
     AuthorizationOut,
     DocumentCreate,
     DocumentOut,
+    DocumentTypeOut,
     SignatureOut,
+    SignatureStatusOut,
     VersionOut,
 )
 from app.storage import StorageConfigurationError, load_version, make_integrity_signature, store_version
@@ -50,6 +53,32 @@ def get_version(version_id: int, db: Session) -> DocumentVersion:
     if version is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document version not found")
     return version
+
+
+def get_document_type(kind: str, db: Session) -> DocumentType:
+    document_type = db.get(DocumentType, kind)
+    if document_type is None or not document_type.is_active:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Document type is not active or does not exist")
+    return document_type
+
+
+def authorization_state(version: DocumentVersion) -> str:
+    if not version.document.requires_notarial_authorization:
+        return "not_required"
+    if not version.authorizations:
+        return "pending"
+    latest = max(version.authorizations, key=lambda item: item.created_at or datetime.min)
+    return latest.decision.value
+
+
+def verify_signature_integrity(signature: DocumentSignature) -> bool:
+    try:
+        Ed25519PublicKey.from_public_bytes(base64.b64decode(signature.public_key)).verify(
+            base64.b64decode(signature.signature), signature.signed_digest.encode("ascii")
+        )
+        return True
+    except Exception:
+        return False
 
 
 def ensure_writable(document: Document, current_user: User) -> None:
@@ -89,13 +118,43 @@ def create_document(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "owner_id does not exist")
     if owner.role in {Role.party, Role.witness} and not db.query(CaseParticipant).filter_by(case_id=case.id, user_id=owner.id).first():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Personal document owners must be registered case participants")
-    document = Document(**payload.model_dump())
+    document_type = get_document_type(payload.kind.value, db)
+    document = Document(
+        case_id=payload.case_id,
+        owner_id=payload.owner_id,
+        kind=document_type.code,
+        title=payload.title,
+        description=payload.description,
+        contains_sensitive_data=(
+            document_type.default_sensitive if payload.contains_sensitive_data is None else payload.contains_sensitive_data
+        ),
+        requires_notarial_authorization=document_type.requires_notarial_authorization,
+        requires_judicial_signature=document_type.requires_judicial_signature,
+    )
     db.add(document)
     db.flush()
-    record_audit(db, request, current_user, "create_document", "document", document.id, {"kind": document.kind.value})
+    record_audit(
+        db,
+        request,
+        current_user,
+        "create_document",
+        "document",
+        document.id,
+        {
+            "kind": document.kind,
+            "requires_notarial_authorization": document.requires_notarial_authorization,
+            "requires_judicial_signature": document.requires_judicial_signature,
+        },
+    )
     db.commit()
     db.refresh(document)
     return document
+
+
+@router.get("/types", response_model=list[DocumentTypeOut])
+def list_document_types(db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
+    """Returns active types and their workflow policy for web/mobile forms."""
+    return db.query(DocumentType).filter_by(is_active=True).order_by(DocumentType.label.asc()).all()
 
 
 @router.get("", response_model=list[DocumentOut])
@@ -182,6 +241,48 @@ async def add_version(
     return version
 
 
+@router.get("/versions/{version_id}/signature-status", response_model=SignatureStatusOut)
+def get_signature_status(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reports a non-error state when a document type does not require a signature."""
+    version = get_version(version_id, db)
+    if not can_access_document(version.document, current_user, db):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to view this version")
+
+    authorization = authorization_state(version)
+    if not version.document.requires_judicial_signature:
+        return SignatureStatusOut(
+            version_id=version.id,
+            document_id=version.document_id,
+            document_kind=version.document.kind,
+            requires_notarial_authorization=version.document.requires_notarial_authorization,
+            requires_judicial_signature=False,
+            authorization_status=authorization,
+            signature_status="not_required",
+        )
+
+    signature = (
+        db.query(DocumentSignature)
+        .filter_by(version_id=version.id)
+        .order_by(DocumentSignature.created_at.desc())
+        .first()
+    )
+    return SignatureStatusOut(
+        version_id=version.id,
+        document_id=version.document_id,
+        document_kind=version.document.kind,
+        requires_notarial_authorization=version.document.requires_notarial_authorization,
+        requires_judicial_signature=True,
+        authorization_status=authorization,
+        signature_status="signed" if signature else "pending",
+        signature_id=signature.id if signature else None,
+        integrity_valid=verify_signature_integrity(signature) if signature else None,
+    )
+
+
 @router.get("/versions/{version_id}/content")
 def read_version_content(
     version_id: int,
@@ -215,6 +316,8 @@ def authorize_version(
     notary: User = Depends(require_roles(Role.notary)),
 ):
     version = get_version(version_id, db)
+    if not version.document.requires_notarial_authorization:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This document type does not require notarial authorization")
     authorization = DocumentAuthorization(
         version_id=version.id,
         notary_id=notary.id,
@@ -256,10 +359,17 @@ def sign_version(
     judge: User = Depends(require_roles(Role.judge)),
 ):
     version = get_version(version_id, db)
-    if not any(a.decision == AuthorizationDecision.authorized for a in version.authorizations):
+    if not version.document.requires_judicial_signature:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This document type does not require a judicial signature")
+    if version.document.requires_notarial_authorization and not any(
+        a.decision == AuthorizationDecision.authorized for a in version.authorizations
+    ):
         raise HTTPException(status.HTTP_409_CONFLICT, "A notarial authorization is required before a judicial signature")
     if version.document.case.status != CaseStatus.active:
         raise HTTPException(status.HTTP_409_CONFLICT, "Only active cases can receive a new signature")
+    existing_signature = db.query(DocumentSignature).filter_by(version_id=version.id).first()
+    if existing_signature:
+        return existing_signature
     algorithm, public_key, signature = make_integrity_signature(version.sha256)
     signed = DocumentSignature(
         version_id=version.id,
@@ -295,11 +405,5 @@ def verify_signature(signature_id: int, db: Session = Depends(get_db), current_u
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature not found")
     if not can_access_document(signature.version.document, current_user, db):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to verify this signature")
-    try:
-        Ed25519PublicKey.from_public_bytes(base64.b64decode(signature.public_key)).verify(
-            base64.b64decode(signature.signature), signature.signed_digest.encode("ascii")
-        )
-        valid = True
-    except Exception:
-        valid = False
+    valid = verify_signature_integrity(signature)
     return {"signature_id": signature.id, "valid": valid, "algorithm": signature.algorithm}

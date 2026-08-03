@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -83,7 +84,16 @@ class DocumentCreate(BaseModel):
     kind: DocumentKind
     title: str = Field(min_length=3, max_length=255)
     description: str | None = None
-    contains_sensitive_data: bool = True
+    contains_sensitive_data: bool | None = None
+
+
+class DocumentTypeOut(ORMModel):
+    code: DocumentKind
+    label: str
+    description: str | None
+    requires_notarial_authorization: bool
+    requires_judicial_signature: bool
+    default_sensitive: bool
 
 
 class DocumentOut(ORMModel):
@@ -94,6 +104,8 @@ class DocumentOut(ORMModel):
     title: str
     description: str | None
     contains_sensitive_data: bool
+    requires_notarial_authorization: bool
+    requires_judicial_signature: bool
     is_archived: bool
     created_at: datetime
 
@@ -138,6 +150,18 @@ class SignatureOut(ORMModel):
     created_at: datetime
 
 
+class SignatureStatusOut(BaseModel):
+    version_id: int
+    document_id: int
+    document_kind: DocumentKind
+    requires_notarial_authorization: bool
+    requires_judicial_signature: bool
+    authorization_status: Literal["not_required", "pending", "authorized", "rejected"]
+    signature_status: Literal["not_required", "pending", "signed"]
+    signature_id: int | None = None
+    integrity_valid: bool | None = None
+
+
 class AuditOut(ORMModel):
     id: int
     actor_id: int | None
@@ -147,4 +171,3 @@ class AuditOut(ORMModel):
     details: str | None
     ip_address: str | None
     created_at: datetime
-

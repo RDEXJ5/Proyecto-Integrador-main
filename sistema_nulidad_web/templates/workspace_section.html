@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}{{ section_label }} - {{ workspace.label }}{% endblock %}
+{% block content %}
+  <a class="back-link" href="{{ url_for('workspace_dashboard', workspace_code=workspace.code) }}">Volver al inicio del espacio</a>
+
+  <section class="section-page-heading">
+    <div>
+      <span class="portal-badge">{{ workspace.label }}</span>
+      <h1>{{ section_label }}</h1>
+      <p>{{ workspace.description }}</p>
+    </div>
+    {% if workspace.code == 'audit' %}<span class="read-only-badge">Solo lectura</span>{% endif %}
+  </section>
+
+  {% if notice %}
+    <section class="integration-notice">
+      <strong>Integración pendiente</strong>
+      <p>{{ notice }}</p>
+    </section>
+  {% endif %}
+
+  {% if workspace.code == 'process' and section_code == 'cases' and 'case.create' in current_permissions %}
+    <section class="document-upload-panel">
+      <div class="upload-panel-heading"><div><span class="sidebar-eyebrow">ALTA PROCESAL</span><h2>Crear expediente</h2><p>El expediente se crea sin responsables jurídicos implícitos; tu cuenta queda asignada para continuar la gestión.</p></div></div>
+      <details class="creation-disclosure">
+        <summary class="button button-primary">+ Nuevo expediente</summary>
+        <form class="document-form creation-form" method="post" action="{{ url_for('create_process_case') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid"><label><span>Folio</span><input name="folio" minlength="3" maxlength="40" required></label><label><span>Título</span><input name="title" minlength="5" maxlength="255" required></label></div>
+        <label><span>Descripción</span><textarea name="description" maxlength="8000" rows="3"></textarea></label>
+        <div class="form-grid">
+          <label><span>Tipo de expediente</span><select name="case_type_code" required><option value="">Selecciona</option>{% for item in process_catalogs.caseTypes or [] %}<option value="{{ item.code }}">{{ item.legal_area_label }} - {{ item.label }}</option>{% endfor %}</select></label>
+          <label><span>Unidad</span><select name="organizational_unit_id" required><option value="">Selecciona</option>{% for unit in process_catalogs.units or [] %}<option value="{{ unit.id }}">{{ unit.name }}</option>{% endfor %}</select></label>
+        </div>
+        <div class="form-grid">
+          <label><span>Confidencialidad</span><select name="confidentiality_level" required><option value="internal">Interna</option><option value="confidential">Confidencial</option><option value="restricted">Restringida</option></select></label>
+          <label><span>Estado inicial</span><select name="initial_status" required><option value="active">Activo</option><option value="draft">Borrador</option></select></label>
+        </div>
+        <label><span>Motivo de apertura</span><textarea name="status_reason" minlength="5" maxlength="1000" rows="3" required></textarea></label>
+          <button class="button button-primary" type="submit">Crear expediente</button>
+        </form>
+      </details>
+    </section>
+  {% endif %}
+
+  {% if section_code in ['cases', 'queue', 'documents', 'assignments', 'stages', 'deadlines', 'decisions', 'history'] %}
+    {% if cases %}
+      <section data-filter-scope aria-label="Filtrar expedientes">
+        <div class="filter-panel">
+          <div class="filter-panel-heading">
+            <div><strong>Filtrar expedientes</strong><small>Solo se filtran los expedientes autorizados para tu perfil.</small></div>
+            <button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button>
+          </div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Folio, título, materia o tipo"></label>
+            <label class="filter-field"><span>Estado</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in cases|map(attribute='status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Materia</span><select data-filter-key="area"><option value="">Todas las materias</option>{% for value in cases|map(attribute='legal_area_label')|select|unique|sort %}<option value="{{ value }}">{{ value }}</option>{% endfor %}</select></label>
+            {% if workspace.code == 'process' %}
+              <label class="filter-field"><span>Etapa procesal</span><select data-filter-key="stage"><option value="">Todas las etapas</option>{% for value in cases|map(attribute='current_stage_code')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('stage') }}</option>{% endfor %}</select></label>
+            {% elif workspace.code == 'review' %}
+              <label class="filter-field"><span>Atención requerida</span><select data-filter-key="attention"><option value="">Todos</option><option value="pending">Con observaciones pendientes</option><option value="clear">Sin observaciones pendientes</option></select></label>
+            {% elif workspace.code == 'contribution' %}
+              <label class="filter-field"><span>Participación</span><select data-filter-key="assignment"><option value="">Todas</option>{% for value in cases|map(attribute='assignment_type_label')|select|unique|sort %}<option value="{{ value }}">{{ value }}</option>{% endfor %}</select></label>
+            {% endif %}
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ cases|length }} de {{ cases|length }} resultados</span><small>Los filtros no modifican asignaciones ni permisos.</small></div>
+        </div>
+      <div class="case-grid">
+        {% for case in cases %}
+          <article
+            class="case-card"
+            data-filter-item
+            data-filter-search="{{ case.folio }} {{ case.title }} {{ case.legal_area_label }} {{ case.case_type_label }}"
+            data-filter-status="{{ case.status }}"
+            data-filter-area="{{ case.legal_area_label }}"
+            data-filter-stage="{{ case.current_stage_code or '' }}"
+            data-filter-assignment="{{ case.assignment_type_label or '' }}"
+            data-filter-attention="{{ 'pending' if (case.pending_observation_count or 0) > 0 else 'clear' }}"
+          >
+            <div class="card-topline">
+              <span class="folio">{{ case.folio }}</span>
+              <span class="status status-{{ case.status }}">{{ status_labels.get(case.status, case.status|replace('_', ' ')) }}</span>
+            </div>
+            <h3>{{ case.title }}</h3>
+            <p class="card-meta">{{ case.legal_area_label }} - {{ case.case_type_label }}</p>
+            <div class="case-facts">
+              <span>{{ case.document_count or 0 }} documentos</span>
+              <span>{{ case.pending_observation_count or 0 }} observaciones pendientes</span>
+              {% if case.current_stage_code %}<span>Etapa: {{ case.current_stage_label or case.current_stage_code|ui_label('stage') }}</span>{% endif %}
+            </div>
+            <div class="card-footer">
+              <span class="scope-label">{{ case.assignment_type_label or "Acceso autorizado" }}</span>
+              <a class="open-link" href="{{ url_for('case_detail', case_id=case.id) }}">Abrir expediente</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay expedientes que coincidan con los filtros seleccionados.</div>
+      </section>
+    {% else %}
+      <div class="empty-state">
+        <span aria-hidden="true">0</span>
+        <h3>No hay expedientes visibles</h3>
+        <p>La vista está lista y espera información autorizada desde el servicio central.</p>
+      </div>
+    {% endif %}
+  {% elif section_code in ['observations', 'notifications'] %}
+    {% if observations %}
+      <section data-filter-scope aria-label="Filtrar observaciones">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar observaciones</strong><small>Busca solicitudes dentro de tus expedientes autorizados.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Folio, documento o contenido"></label>
+            <label class="filter-field"><span>Estado</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in observations|map(attribute='observation_status')|select|unique|sort %}<option value="{{ value }}">{{ observation_status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Tipo</span><select data-filter-key="type"><option value="">Todos los tipos</option>{% for value in observations|map(attribute='observation_type')|select|unique|sort %}<option value="{{ value }}">{{ observation_type_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ observations|length }} de {{ observations|length }} resultados</span><small>El filtro no cambia el estado de la observación.</small></div>
+        </div>
+      <div class="observation-list observation-inbox">
+        {% for observation in observations %}
+          <article class="observation-card" data-filter-item data-filter-search="{{ observation.case_folio }} {{ observation.document_title }} {{ observation.body }}" data-filter-status="{{ observation.observation_status }}" data-filter-type="{{ observation.observation_type }}">
+            <div class="card-topline">
+              <div>
+                <span class="folio">{{ observation.case_folio }} - VERSIÓN {{ observation.version_number }}</span>
+                <h3>{{ observation.document_title }}</h3>
+              </div>
+              <span class="status status-{{ observation.observation_status }}">{{ observation_status_labels.get(observation.observation_status, observation.observation_status) }}</span>
+            </div>
+            <p class="observation-body">{{ observation.body }}</p>
+            <div class="card-footer">
+              <span class="scope-label">{{ observation_type_labels.get(observation.observation_type, observation.observation_type|replace('_', ' ')) }} - {{ observation.response_count }} respuestas</span>
+              <a class="open-link" href="{{ url_for('document_detail', document_id=observation.document_id) }}#observations">Abrir seguimiento</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay observaciones que coincidan con los filtros.</div>
+      </section>
+    {% else %}
+      <div class="empty-state">
+        <span aria-hidden="true">0</span>
+        <h3>No hay observaciones visibles</h3>
+        <p>Las solicitudes de aclaración o corrección de tus expedientes aparecerán aquí.</p>
+      </div>
+    {% endif %}
+  {% elif workspace.code == 'audit' and section_code in ['events', 'access'] %}
+    {% set audit_events = audit_data.events or [] %}
+    {% if audit_events %}
+      <section data-filter-scope aria-label="Filtrar eventos de auditoría">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar trazabilidad</strong><small>Los criterios cambian según los eventos disponibles en esta bitácora.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Actor, correo, acción, recurso o IP"></label>
+            <label class="filter-field"><span>Acción</span><select data-filter-key="action"><option value="">Todas las acciones</option>{% for value in audit_events|map(attribute='action_code')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('audit_action') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Elemento afectado</span><select data-filter-key="resource"><option value="">Todos los elementos</option>{% for value in audit_events|map(attribute='resource_type')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('resource') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Origen de la acción</span><select data-filter-key="channel"><option value="">Todos los orígenes</option>{% for value in audit_events|map(attribute='client_channel')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('channel') }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ audit_events|length }} de {{ audit_events|length }} resultados</span><small>Vista de solo lectura.</small></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Fecha</th><th>Responsable</th><th>Acción</th><th>Elemento afectado</th><th>Origen y dirección IP</th></tr></thead><tbody>{% for event in audit_events %}<tr data-filter-item data-filter-search="{{ event.created_at }} {{ event.actor_name or 'Sistema' }} {{ event.actor_email or '' }} {{ event.action_code }} {{ event.resource_type }} {{ event.resource_id }} {{ event.ip_address or '' }}" data-filter-action="{{ event.action_code }}" data-filter-resource="{{ event.resource_type }}" data-filter-channel="{{ event.client_channel }}"><td>{{ event.created_at }}</td><td><strong>{{ event.actor_name or 'Sistema' }}</strong><small>{{ event.actor_email or '' }}</small></td><td>{{ event.action_code|ui_label('audit_action') }}</td><td>{{ event.resource_type|ui_label('resource') }} número {{ event.resource_id }}</td><td>{{ event.client_channel|ui_label('channel') }}<small>{{ event.ip_address or 'Sin dirección registrada' }}</small></td></tr>{% endfor %}</tbody></table></div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay eventos que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay eventos para mostrar</h3><p>La bitácora no devolvió registros autorizados.</p></div>{% endif %}
+  {% elif workspace.code == 'audit' and section_code == 'versions' %}
+    {% set audit_versions = audit_data.versions or [] %}
+    {% if audit_versions %}
+      <section data-filter-scope aria-label="Filtrar versiones auditadas">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar versiones</strong><small>Localiza archivos por expediente, tipo, origen o almacenamiento.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Folio, documento, archivo o huella"></label>
+            <label class="filter-field"><span>Tipo documental</span><select data-filter-key="type"><option value="">Todos los tipos</option>{% for value in audit_versions|map(attribute='document_type_code')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('document_type') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Origen</span><select data-filter-key="origin"><option value="">Todos los orígenes</option>{% for value in audit_versions|map(attribute='upload_source')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('upload_source') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Almacenamiento</span><select data-filter-key="storage"><option value="">Todos los estados</option>{% for value in audit_versions|map(attribute='storage_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ audit_versions|length }} de {{ audit_versions|length }} resultados</span><small>Las versiones permanecen inmutables.</small></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Expediente</th><th>Documento</th><th>Versión</th><th>Origen</th><th>Integridad</th></tr></thead><tbody>{% for version in audit_versions %}<tr data-filter-item data-filter-search="{{ version.case_folio }} {{ version.document_title }} {{ version.document_type_code }} {{ version.original_name }} {{ version.sha256 or '' }}" data-filter-type="{{ version.document_type_code }}" data-filter-origin="{{ version.upload_source }}" data-filter-storage="{{ version.storage_status }}"><td>{{ version.case_folio }}</td><td><strong>{{ version.document_title }}</strong><small>{{ version.document_type_label or version.document_type_code|ui_label('document_type') }}</small></td><td>Versión {{ version.version_number }} - {{ version.original_name }}</td><td>{{ version.upload_source|ui_label('upload_source') }}<small>{{ version.client_channel|ui_label('channel') }}</small></td><td><code>{{ version.sha256[:16] if version.sha256 else '-' }}...</code><small>{{ version.storage_status|ui_label('status') }}</small></td></tr>{% endfor %}</tbody></table></div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay versiones que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay versiones</h3><p>La auditoría no devolvió versiones autorizadas.</p></div>{% endif %}
+  {% elif workspace.code == 'audit' and section_code == 'signatures' %}
+    {% set audit_signatures = audit_data.signatures or [] %}
+    {% if audit_signatures %}
+      <section data-filter-scope aria-label="Filtrar firmas auditadas">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar firmas</strong><small>Consulta constancias por expediente, firmante o verificación.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Folio, documento, firmante o algoritmo"></label>
+            <label class="filter-field"><span>Verificación</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in audit_signatures|map(attribute='verification_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Rol firmante</span><select data-filter-key="role"><option value="">Todos los roles</option>{% for value in audit_signatures|map(attribute='signer_role_code')|select|unique|sort %}<option value="{{ value }}">{{ role_labels.get(value, value|replace('_', ' ')|title) }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ audit_signatures|length }} de {{ audit_signatures|length }} resultados</span><small>Vista de solo lectura.</small></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Fecha</th><th>Expediente</th><th>Documento</th><th>Firmante</th><th>Verificación</th></tr></thead><tbody>{% for signature in audit_signatures %}<tr data-filter-item data-filter-search="{{ signature.signed_at or signature.recorded_at }} {{ signature.case_folio }} {{ signature.document_title }} {{ signature.signer_name or 'Externo' }} {{ signature.algorithm }}" data-filter-status="{{ signature.verification_status }}" data-filter-role="{{ signature.signer_role_code }}"><td>{{ signature.signed_at or signature.recorded_at }}</td><td>{{ signature.case_folio }}</td><td>{{ signature.document_title }} - versión {{ signature.version_number }}</td><td>{{ signature.signer_name or 'Firmante externo' }}<small>{{ signature.signer_role_code|ui_label('role') }}</small></td><td><span class="status status-{{ signature.verification_status }}">{{ signature.verification_status|ui_label('status') }}</span><small>Algoritmo: {{ signature.algorithm }}</small></td></tr>{% endfor %}</tbody></table></div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay firmas que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay firmas</h3><p>La auditoría no devolvió constancias de firma.</p></div>{% endif %}
+  {% elif workspace.code == 'audit' and section_code == 'reports' %}
+    <div class="module-placeholder"><span class="module-code">CSV</span><h2>Reporte de trazabilidad</h2><p>Genera una copia de solo lectura de hasta 5000 eventos. La exportación no modifica ni elimina la bitácora.</p><a class="button button-primary" href="{{ url_for('download_audit_report') }}">Descargar reporte CSV</a></div>
+  {% elif workspace.code == 'administration' and section_code == 'users' %}
+    {% set admin_users = administration_data.users or [] %}
+    <details class="creation-disclosure creation-disclosure-block">
+      <summary class="button button-primary">+ Nuevo usuario</summary>
+    <section class="document-upload-panel"><div class="upload-panel-heading"><div><span class="sidebar-eyebrow">IDENTIDAD</span><h2>Crear usuario</h2><p>Las bajas posteriores serán lógicas; la cuenta nunca se elimina.</p></div></div><form class="document-form" method="post" action="{{ url_for('create_administration_user') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="form-grid"><label><span>Nombre completo</span><input name="full_name" minlength="3" maxlength="160" required></label><label><span>Correo</span><input name="email" type="email" required></label></div><div class="form-grid"><label><span>Contraseña inicial</span><input name="password" type="password" minlength="4" required></label><label><span>Rol inicial</span><select name="role_code" required>{% for role in ['lawyer','prosecutor','defender','expert','judge','notary','secretary','coordinator','auditor','party','witness'] %}<option value="{{ role }}">{{ role_labels.get(role, role) }}</option>{% endfor %}</select></label></div><label><span>Motivo</span><textarea name="reason" minlength="5" maxlength="1000" required></textarea></label><button class="button button-primary" type="submit">Crear usuario</button></form></section>
+    </details>
+    {% if admin_users %}
+      <section data-filter-scope aria-label="Filtrar usuarios">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar usuarios</strong><small>Consulta identidades técnicas y jurídicas sin modificar sus permisos.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Nombre, correo o rol"></label>
+            <label class="filter-field"><span>Estado de cuenta</span><select data-filter-key="status"><option value="">Todos los estados</option>{% for value in admin_users|map(attribute='account_status')|select|unique|sort %}<option value="{{ value }}">{{ status_labels.get(value, value|replace('_', ' ')) }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Rol</span><select data-filter-key="role" data-filter-mode="token"><option value="">Todos los roles</option>{% for role in administration_data.roles or [] %}<option value="{{ role.code }}">{{ role.label }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ admin_users|length }} de {{ admin_users|length }} resultados</span><small>El filtrado no concede ni revoca roles.</small></div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Usuario</th><th>Roles</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {% for user in admin_users %}
+                <tr data-filter-item data-filter-search="{{ user.full_name }} {{ user.email }} {{ user.roles|join(' ') }}" data-filter-status="{{ user.account_status }}" data-filter-role="{{ user.roles|join('|') }}">
+                  <td>
+                    <strong>{{ user.full_name }}</strong>
+                    <small>{{ user.email }}</small>
+                    <a class="table-profile-link" href="{{ url_for('administration_user_detail', user_id=user.id) }}">{{ icon('user') }}<span>Ver perfil detallado</span></a>
+                  </td>
+                  <td>
+                    {% if user.roles %}<div class="role-label-list">{% for role_code in user.roles %}<span>{{ role_code|ui_label('role') }}</span>{% endfor %}</div>{% else %}Sin rol activo{% endif %}
+                    {% if user.roles|length < (administration_data.roles or [])|length %}
+                      <details>
+                        <summary>Conceder rol</summary>
+                        <form class="compact-row-form" method="post" action="{{ url_for('grant_administration_role', user_id=user.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <select name="role_code" required><option value="">Selecciona un rol</option>{% for role in administration_data.roles or [] if role.code not in user.roles %}<option value="{{ role.code }}">{{ role.label }}</option>{% endfor %}</select>
+                          <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+                          <button class="button button-outline" type="submit">Conceder</button>
+                        </form>
+                      </details>
+                    {% endif %}
+                    {% for role_code in user.roles %}
+                      {% if not (user.id == current_user.id and role_code == 'admin') %}
+                        <details>
+                          <summary>Revocar rol de {{ role_code|ui_label('role') }}</summary>
+                          <form class="compact-row-form" method="post" action="{{ url_for('revoke_administration_role', user_id=user.id, role_code=role_code) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+                            <button class="button button-outline" type="submit">Revocar</button>
+                          </form>
+                        </details>
+                      {% endif %}
+                    {% endfor %}
+                  </td>
+                  <td><span class="status status-{{ user.account_status }}">{{ user.account_status|ui_label('status') }}</span></td>
+                  <td>
+                    {% if user.id != current_user.id %}
+                      <details>
+                        <summary>Cambiar estado</summary>
+                        <form class="compact-row-form" method="post" action="{{ url_for('change_administration_user_status', user_id=user.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <select name="status" required><option value="">Selecciona un estado</option>{% for state_code in ['active', 'suspended', 'archived'] if state_code != user.account_status %}<option value="{{ state_code }}">{{ state_code|ui_label('status') }}</option>{% endfor %}</select>
+                          <input name="reason" minlength="5" maxlength="1000" required placeholder="Motivo">
+                          <button class="button button-outline" type="submit">Guardar</button>
+                        </form>
+                      </details>
+                    {% else %}<small>Cuenta actual protegida</small>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay usuarios que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay usuarios visibles</h3><p>El servicio central no devolvió identidades administrables.</p></div>{% endif %}
+  {% elif workspace.code == 'administration' and section_code == 'roles' %}
+    {% set admin_roles = administration_data.roles or [] %}
+    {% if admin_roles %}
+      <section data-filter-scope aria-label="Filtrar roles">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar roles y permisos</strong><small>Distingue perfiles del sitio web, de la aplicación móvil y de administración técnica.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Rol, descripción o función permitida"></label>
+            <label class="filter-field"><span>Medio de acceso</span><select data-filter-key="channel"><option value="">Todos los medios</option>{% for value in admin_roles|map(attribute='channel')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('channel') }}</option>{% endfor %}</select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ admin_roles|length }} de {{ admin_roles|length }} resultados</span><small>Esta consulta no modifica permisos.</small></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Rol</th><th>Medio de acceso</th><th>Descripción</th><th>Funciones permitidas</th></tr></thead><tbody>{% for role in admin_roles %}<tr data-filter-item data-filter-search="{{ role.label }} {{ role.code }} {{ role.description }} {% for permission in administration_data.permissions or [] if permission.role_code == role.code %}{{ permission.permission_code }} {{ permission.description }} {% endfor %}" data-filter-channel="{{ role.channel }}"><td><strong>{{ role.label }}</strong></td><td>{{ role.channel|ui_label('channel') }}</td><td>{{ role.description }}</td><td><div class="permission-list">{% for permission in administration_data.permissions or [] if permission.role_code == role.code %}<span class="permission-label">{{ permission.description }}</span>{% else %}<span class="permission-label">Sin funciones activas</span>{% endfor %}</div></td></tr>{% endfor %}</tbody></table></div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay roles que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay roles visibles</h3><p>El servicio central no devolvió roles configurados.</p></div>{% endif %}
+  {% elif workspace.code == 'administration' and section_code == 'catalogs' %}
+    {% set document_catalog = administration_data.catalogs.documentTypes or [] %}
+    <details class="creation-disclosure creation-disclosure-block">
+      <summary class="button button-primary">+ Nuevo tipo documental</summary>
+    <section class="document-upload-panel"><div class="upload-panel-heading"><div><span class="sidebar-eyebrow">POLÍTICA POR TIPO</span><h2>Crear tipo documental</h2><p>La primera regla queda inmutable; los cambios futuros deberán publicarse como una regla nueva.</p></div></div><form class="document-form" method="post" action="{{ url_for('create_administration_document_type') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="form-grid"><label><span>Identificador interno</span><input name="code" pattern="[a-z][a-z0-9_]+" placeholder="Ejemplo: acta_nacimiento" required><small>Usa letras minúsculas y guiones bajos. Este dato no se mostrará a los usuarios.</small></label><label><span>Nombre visible</span><input name="label" minlength="3" maxlength="120" required></label></div><label><span>Descripción</span><textarea name="description" minlength="5" maxlength="500" required></textarea></label><div class="form-grid"><label><span>Propietario</span><select name="owner_scope"><option value="case">Expediente</option><option value="participant">Participante</option></select></label><label><span>Firma incorporada</span><select name="embedded_signature_policy"><option value="none">No aplica</option><option value="optional">Opcional</option><option value="required">Obligatoria</option><option value="conditional">Condicional</option></select></label><label><span>Firma de la plataforma</span><select name="platform_signature_policy"><option value="none">No aplica</option><option value="optional">Opcional</option><option value="required">Obligatoria</option><option value="conditional">Condicional</option></select></label><label><span>Análisis automático</span><select name="analyzer_policy"><option value="skip">No analizar</option><option value="on_demand">Analizar cuando se solicite</option><option value="automatic">Analizar automáticamente</option></select></label></div><div class="checkbox-grid"><label><input type="checkbox" name="default_sensitive" value="yes" checked> Contiene datos sensibles</label><label><input type="checkbox" name="requires_authorization" value="yes"> Requiere autorización</label><label><input type="checkbox" name="requires_certification" value="yes"> Requiere certificación</label></div><label><span>Roles autorizados para firmar</span><select name="signer_roles" multiple><option value="judge">Juez</option><option value="notary">Notario</option><option value="lawyer">Abogado</option><option value="prosecutor">Fiscal</option><option value="defender">Defensor</option><option value="expert">Perito</option><option value="secretary">Secretario</option></select><small>Para seleccionar varios roles, mantén presionada la tecla Ctrl mientras haces clic.</small></label><button class="button button-primary" type="submit">Crear tipo y regla</button></form></section>
+    </details>
+    {% if document_catalog %}
+      <section data-filter-scope aria-label="Filtrar catálogo documental">
+        <div class="filter-panel">
+          <div class="filter-panel-heading"><div><strong>Filtrar tipos documentales</strong><small>Consulta las políticas que determinan análisis, autorización y firma.</small></div><button class="filter-reset" type="button" data-filter-reset>Limpiar filtros</button></div>
+          <div class="filter-controls">
+            <label class="filter-field"><span>Buscar</span><input type="search" data-filter-key="search" placeholder="Nombre o descripción"></label>
+            <label class="filter-field"><span>Firma incorporada</span><select data-filter-key="embedded"><option value="">Todas las políticas</option>{% for value in document_catalog|map(attribute='embedded_signature_policy')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('policy') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Firma de la plataforma</span><select data-filter-key="platform"><option value="">Todas las políticas</option>{% for value in document_catalog|map(attribute='platform_signature_policy')|select|unique|sort %}<option value="{{ value }}">{{ value|ui_label('policy') }}</option>{% endfor %}</select></label>
+            <label class="filter-field"><span>Autorización</span><select data-filter-key="authorization"><option value="">Todos</option><option value="required">Requerida</option><option value="not_required">No requerida</option></select></label>
+          </div>
+          <div class="filter-panel-footer"><span class="filter-result-count" data-filter-count aria-live="polite">{{ document_catalog|length }} de {{ document_catalog|length }} resultados</span><small>El filtrado no cambia la política documental.</small></div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Tipo documental</th><th>Firma incorporada</th><th>Firma de la plataforma</th><th>Autorización</th><th>Certificación</th></tr></thead><tbody>{% for item in document_catalog %}<tr data-filter-item data-filter-search="{{ item.code }} {{ item.label }} {{ item.description }}" data-filter-embedded="{{ item.embedded_signature_policy }}" data-filter-platform="{{ item.platform_signature_policy }}" data-filter-authorization="{{ 'required' if item.requires_authorization else 'not_required' }}"><td><strong>{{ item.label }}</strong><small>{{ item.description }}</small></td><td>{{ item.embedded_signature_policy|ui_label('policy') }}</td><td>{{ item.platform_signature_policy|ui_label('policy') }}</td><td>{{ 'Requerida' if item.requires_authorization else 'No requerida' }}</td><td>{{ 'Requerida' if item.requires_certification else 'No requerida' }}</td></tr>{% endfor %}</tbody></table></div>
+        <div class="filter-empty-state" data-filter-empty hidden>No hay tipos documentales que coincidan con los filtros.</div>
+      </section>
+    {% else %}<div class="empty-state"><h3>No hay tipos documentales</h3><p>El servicio central no devolvió políticas configuradas.</p></div>{% endif %}
+  {% elif workspace.code == 'administration' and section_code == 'configuration' %}
+    {% set configuration = administration_data.configuration or {} %}<div class="record-summary"><div><span>Entorno de ejecución</span><strong>{{ configuration.environment|ui_label('environment') }}</strong></div><div><span>Duración de la sesión</span><strong>{{ configuration.jwtExpiresIn|ui_label('duration') }}</strong></div><div><span>Almacenamiento documental</span><strong>{{ configuration.storageProvider|ui_label('provider') }}</strong></div><div><span>Conservación de archivos</span><strong>{{ configuration.objectRetention|ui_label('retention') }}</strong></div><div><span>Tamaño máximo por archivo</span><strong>{{ configuration.maxDocumentBytes|file_size }}</strong></div><div><span>Credenciales visibles</span><strong>{{ 'Sí' if configuration.secretsExposed else 'No' }}</strong></div></div>
+  {% elif section_code == 'health' and health_status %}
+    <div class="health-grid">
+      <article class="metric-card"><strong>{{ health_status.api|ui_label('status') }}</strong><span>Servicio de la aplicación</span><small>Operaciones del sistema</small></article>
+      <article class="metric-card"><strong>{{ health_status.database|ui_label('status') }}</strong><span>Base de datos</span><small>Conectividad reportada</small></article>
+      <article class="metric-card"><strong>{{ health_status.storage|ui_label('status') }}</strong><span>Almacenamiento documental</span><small>Servicio privado de archivos</small></article>
+    </div>
+  {% else %}
+    <div class="module-placeholder">
+      <span class="module-code">{{ section_label|upper }}</span>
+      <h2>Módulo preparado para el servicio central</h2>
+      <p>Este apartado no crea información ficticia. Se habilitará cuando existan funciones autorizadas para tu perfil.</p>
+      <div class="capability-tags">
+        {% for action in actions %}<span>{{ action.label }}</span>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

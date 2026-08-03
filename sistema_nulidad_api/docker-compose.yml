@@ -1,0 +1,281 @@
+services:
+  db:
+    image: mysql:8.4.11
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE en .env}
+      MYSQL_USER: ${MYSQL_USER:?Defina MYSQL_USER en .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD en .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+    volumes:
+      - nulidad_mysql_data:/var/lib/mysql
+      - ../sistema_nulidad_bd/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../sistema_nulidad_bd/migrations/002_generalizacion_plataforma.sql:/docker-entrypoint-initdb.d/02-generalization.sql:ro
+      - ../sistema_nulidad_bd/migrations/003_contribution_inline_preview.sql:/docker-entrypoint-initdb.d/03-contribution-inline-preview.sql:ro
+      - ../sistema_nulidad_bd/migrations/004_document_observation_workflow.sql:/docker-entrypoint-initdb.d/04-document-observation-workflow.sql:ro
+      - ../sistema_nulidad_bd/migrations/005_case_centric_access.sql:/docker-entrypoint-initdb.d/05-case-centric-access.sql:ro
+      - ../sistema_nulidad_bd/migrations/006_review_decision_workflow.sql:/docker-entrypoint-initdb.d/06-review-decision-workflow.sql:ro
+      - ../sistema_nulidad_bd/migrations/007_process_management.sql:/docker-entrypoint-initdb.d/07-process-management.sql:ro
+      - ../sistema_nulidad_bd/migrations/008_utf8mb4_demo_repair.sql:/docker-entrypoint-initdb.d/08-utf8mb4-demo-repair.sql:ro
+      - ../sistema_nulidad_bd/migrations/009_spanish_demo_copy.sql:/docker-entrypoint-initdb.d/09-spanish-demo-copy.sql:ro
+      - ../sistema_nulidad_bd/migrations/010_spanish_catalog_copy.sql:/docker-entrypoint-initdb.d/10-spanish-catalog-copy.sql:ro
+      - ../sistema_nulidad_bd/migrations/011_spanish_legal_catalogs.sql:/docker-entrypoint-initdb.d/11-spanish-legal-catalogs.sql:ro
+      - ../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/docker-entrypoint-initdb.d/12-mobile-api-channel.sql:ro
+      - ../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/docker-entrypoint-initdb.d/13-mobile-registration-invitations.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - private
+    security_opt:
+      - no-new-privileges:true
+
+  db-migrate-mobile:
+    image: mysql:8.4.11
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+    volumes:
+      - ../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/migrations/012_mobile_api_channel.sql:ro
+      - ../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/migrations/013_mobile_registration_invitations.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/012_mobile_api_channel.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/013_mobile_registration_invitations.sql
+    networks:
+      - private
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  demo-seed:
+    image: mysql:8.4.11
+    profiles: ["demo"]
+    restart: "no"
+    depends_on:
+      db-migrate-mobile:
+        condition: service_completed_successfully
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+    volumes:
+      - ../sistema_nulidad_bd/seed_workspace_users.sql:/seeds/01-workspace-users.sql:ro
+      - ../sistema_nulidad_bd/seed_case_assignment_demo.sql:/seeds/02-case-assignments.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /seeds/01-workspace-users.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /seeds/02-case-assignments.sql
+    networks:
+      - private
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  minio-volume-init:
+    image: alpine:3.22
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 100:101 /data"]
+    volumes:
+      - expediente_minio_data:/data
+    networks:
+      - private
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    restart: unless-stopped
+    depends_on:
+      minio-volume-init:
+        condition: service_completed_successfully
+    command: server /data --console-address ":9001"
+    env_file:
+      - ${STORAGE_ENV_FILE:-.env.storage}
+    volumes:
+      - expediente_minio_data:/data
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - private
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  minio-setup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - ${STORAGE_ENV_FILE:-.env.storage}
+    environment:
+      MC_CONFIG_DIR: /tmp/.mc
+    volumes:
+      - ./minio/policy.json:/config/policy.json:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing --with-lock "local/$$MINIO_BUCKET" &&
+        mc version enable "local/$$MINIO_BUCKET" &&
+        mc retention set --default COMPLIANCE 10y "local/$$MINIO_BUCKET" &&
+        mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" &&
+        mc admin policy create local expediente-api /config/policy.json &&
+        mc admin policy attach local expediente-api --user "$$MINIO_ACCESS_KEY"
+    networks:
+      - private
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db-migrate-mobile:
+        condition: service_completed_successfully
+      minio-setup:
+        condition: service_completed_successfully
+    env_file:
+      - ${STORAGE_ENV_FILE:-.env.storage}
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE en .env}
+      DB_USER: ${MYSQL_USER:?Defina MYSQL_USER en .env}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD en .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      JWT_ISSUER: ${JWT_ISSUER:-sistema-nulidad-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sistema-nulidad-clients}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY:?Defina API_APPLICATION_KEY en .env}
+      PLATFORM_SIGNATURE_SECRET: ${PLATFORM_SIGNATURE_SECRET:?Defina PLATFORM_SIGNATURE_SECRET en .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    networks:
+      - private
+      - edge
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  mobile-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "src/mobile-server.js"]
+    restart: unless-stopped
+    depends_on:
+      db-migrate-mobile:
+        condition: service_completed_successfully
+      minio-setup:
+        condition: service_completed_successfully
+    env_file:
+      - ${STORAGE_ENV_FILE:-.env.storage}
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE en .env}
+      DB_USER: ${MYSQL_USER:?Defina MYSQL_USER en .env}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD en .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      JWT_ISSUER: ${JWT_ISSUER:-sistema-nulidad-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sistema-nulidad-clients}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY:?Defina API_APPLICATION_KEY en .env}
+      PLATFORM_SIGNATURE_SECRET: ${PLATFORM_SIGNATURE_SECRET:?Defina PLATFORM_SIGNATURE_SECRET en .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+    ports:
+      - "${MOBILE_API_BIND_ADDRESS:-127.0.0.1}:${MOBILE_API_PORT:-3001}:3001"
+    networks:
+      - private
+      - edge
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: ../sistema_nulidad_web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:3000
+      WEB_ENV: ${NODE_ENV:-production}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_DIR: /tmp/sessions
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5000}:5000"
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  nulidad_mysql_data:
+  expediente_minio_data:
+
+networks:
+  private:
+    internal: true
+  edge:

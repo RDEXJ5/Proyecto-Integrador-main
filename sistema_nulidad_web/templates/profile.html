@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Mi perfil - Expediente Íntegro{% endblock %}
+{% block content %}
+  <a class="back-link" href="{{ url_for('dashboard') }}">Volver al espacio de trabajo</a>
+
+  <section class="profile-hero">
+    <div class="profile-avatar" aria-hidden="true">{{ current_user.fullName[:1]|upper }}</div>
+    <div>
+      <span class="portal-badge">MI PERFIL</span>
+      <h1>{{ current_user.fullName }}</h1>
+      <p>{{ current_user.email }}</p>
+      <div class="role-chip-row" aria-label="Roles activos">
+        {% for role in current_user.roles %}<span class="role-chip">{{ role|ui_label('role') }}</span>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="profile-panel profile-edit-panel">
+    <div class="profile-edit-intro">
+      <div>
+        <span class="sidebar-eyebrow">DATOS PERSONALES</span>
+        <h2>Información de mi perfil</h2>
+        <p>Puedes actualizar el nombre que se muestra dentro del sistema.</p>
+      </div>
+      {{ icon('user', 'profile-edit-icon') }}
+    </div>
+    <details class="creation-disclosure profile-edit-disclosure">
+      <summary class="button button-primary">{{ icon('settings') }}<span>Editar mis datos</span></summary>
+      <form class="document-form profile-edit-form" method="post" action="{{ url_for('profile') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <label>
+            <span>Nombre visible</span>
+            <input name="full_name" value="{{ current_user.fullName }}" minlength="3" maxlength="160" autocomplete="name" required>
+          </label>
+          <label>
+            <span>Correo electrónico</span>
+            <input value="{{ current_user.email }}" readonly aria-describedby="protected-profile-data">
+            <small>Dato protegido para conservar tu identidad de acceso.</small>
+          </label>
+        </div>
+        <button class="button button-primary" type="submit">{{ icon('save') }}<span>Guardar cambios</span></button>
+      </form>
+    </details>
+    {% if 'admin' in current_user.roles %}
+      <div id="protected-profile-data" class="profile-support-note profile-administration-note">
+        {{ icon('shield') }}
+        <div>
+          <strong>Datos administrativos protegidos</strong>
+          <p>El correo, los roles, los permisos y el estado se gestionan desde el registro de usuarios para conservar la trazabilidad.</p>
+          <a href="{{ url_for('workspace_section', workspace_code='administration', section_code='users') }}">Abrir registro de usuarios</a>
+        </div>
+      </div>
+    {% else %}
+      <div id="protected-profile-data" class="profile-support-note">
+        {{ icon('shield') }}
+        <div>
+          <strong>Algunos datos no pueden modificarse desde Mi perfil</strong>
+          <p>El correo electrónico, los roles, los permisos y el estado de la cuenta están protegidos. Si necesitas cambiar alguno, contacta a soporte.</p>
+          <a href="mailto:cristian05corona@gmail.com">cristian05corona@gmail.com</a>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  <div class="profile-grid">
+    <section class="profile-panel">
+      <div class="section-heading section-heading-top">
+        <div><h2>Espacios autorizados</h2><p>Cada espacio conserva sus propios permisos y alcance.</p></div>
+      </div>
+      <div class="profile-workspace-list">
+        {% for workspace in available_workspaces %}
+          <a href="{{ url_for('workspace_dashboard', workspace_code=workspace.code) }}">
+            <span>{{ "%02d"|format(loop.index) }}</span>
+            <div><strong>{{ workspace.label }}</strong><small>{{ workspace.description }}</small></div>
+            <b aria-hidden="true">›</b>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+
+    <aside class="profile-panel security-panel">
+      <p class="sidebar-eyebrow">SEGURIDAD DE LA SESIÓN</p>
+      <h2>Acceso protegido</h2>
+      <ul class="security-facts">
+        <li><strong>Sesión protegida</strong><span>Los datos de acceso no quedan disponibles para otros sitios.</span></li>
+        <li><strong>Duración</strong><span>{{ session_minutes }} minutos con renovación durante el uso.</span></li>
+        <li><strong>Alcance</strong><span>El sistema verifica el rol, los permisos y las asignaciones en cada operación.</span></li>
+        <li><strong>Canal</strong><span>Sitio web para perfiles profesionales y técnicos.</span></li>
+      </ul>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="button button-outline button-full" type="submit">Cerrar sesión</button>
+      </form>
+    </aside>
+  </div>
+
+  <section class="profile-panel permissions-panel">
+    <div class="section-heading section-heading-top">
+      <div><h2>Funciones habilitadas</h2><p>Descripción comprensible de las capacidades concedidas a tus roles activos.</p></div>
+      <span class="count-badge">{{ profile_permissions|length }} funciones</span>
+    </div>
+    {% if profile_permissions %}
+      <div class="profile-permission-grid">
+        {% for permission in profile_permissions %}<span>{{ permission }}</span>{% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state compact-empty"><h3>Sin funciones asignadas</h3><p>Solicita al administrador que revise la configuración de tu cuenta.</p></div>
+    {% endif %}
+  </section>
+{% endblock %}
