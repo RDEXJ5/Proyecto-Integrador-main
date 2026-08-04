@@ -12,6 +12,7 @@ administrativas, constitucionales y tipos configurables.
 - La política de firma, autorización, certificación y análisis se captura por versión.
 - Los archivos nuevos residirán en MinIO; MySQL conserva metadatos, hashes y trazabilidad.
 - Los binarios históricos existentes permanecen protegidos dentro de MySQL.
+- Los folios nuevos se reservan mediante una secuencia anual y transaccional por materia.
 
 ## Instalación nueva
 
@@ -52,6 +53,7 @@ eliminar expedientes u objetos y modificar políticas históricas.
 
 - `legal_areas`, `case_types`, `organizational_units`: clasificación jurídica.
 - `case_profiles`: extensión general de los expedientes históricos.
+- `case_folio_sequences`: numeración automática por materia y año sin colisiones concurrentes.
 - `case_assignments`: responsables explícitos con revocación lógica.
 - `case_participant_roles`: participantes con funciones configurables.
 - `case_stage_definitions`, `case_stage_transitions`, `case_deadlines`: operación procesal.

@@ -441,9 +441,28 @@ export const openapiDocument = {
     },
     '/process/cases': {
       post: {
-        tags: ['Gestión procesal'], summary: 'Crea un expediente general y asigna al operador que lo registró.', security: [{ bearerAuth: [] }],
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
-        responses: { 201: { description: 'Expediente creado con perfil e historial inicial.' }, 409: { description: 'Folio duplicado.' } }
+        tags: ['Gestión procesal'], summary: 'Crea un expediente con folio automático y asigna al operador que lo registró.', security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'caseTypeCode', 'organizationalUnitId', 'confidentialityLevel', 'statusReason'],
+                properties: {
+                  title: { type: 'string', minLength: 5, maxLength: 255 },
+                  description: { type: 'string', maxLength: 8000 },
+                  caseTypeCode: { type: 'string' },
+                  organizationalUnitId: { type: 'integer', minimum: 1 },
+                  confidentialityLevel: { type: 'string', enum: ['internal', 'confidential', 'restricted'] },
+                  initialStatus: { type: 'string', enum: ['draft', 'active'], default: 'active' },
+                  statusReason: { type: 'string', minLength: 5, maxLength: 1000 }
+                }
+              }
+            }
+          }
+        },
+        responses: { 201: { description: 'Expediente creado con folio, perfil e historial inicial.' }, 409: { description: 'No fue posible reservar una secuencia única después de varios intentos.' } }
       }
     },
     '/process/cases/{caseId}': {

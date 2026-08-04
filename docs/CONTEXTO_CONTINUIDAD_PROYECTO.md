@@ -72,7 +72,7 @@ servicios de autenticación, versionamiento, políticas y almacenamiento. Sólo
 expone expedientes participantes, documentos propios, cargas desde archivo o
 cámara, versiones y respuestas a observaciones. No expone descargas, firmas,
 autorizaciones, decisiones ni administración. La migración más reciente es
-`015_workspace_accounts.sql`.
+`016_automatic_case_folios.sql`.
 
 Tecnologías principales:
 
@@ -210,15 +210,16 @@ El esquema actual incluye `schema.sql` y migraciones hasta:
 012_mobile_api_channel.sql
 013_mobile_registration_invitations.sql
 015_workspace_accounts.sql
+016_automatic_case_folios.sql
 ```
 
-La migración experimental `014_signature_detection_v2.sql` fue retirada del repositorio al descartarse la detección automática de firmas. El volumen local ya la había ejecutado antes del retiro y conserva su asiento y tablas por la regla de no borrado. Los permisos de análisis añadidos a juez y notario se revocaron lógicamente el 3 de agosto de 2026. La migración `015_workspace_accounts.sql` crea las cuatro cuentas por espacio y archiva lógicamente las cuentas `web.*`. La siguiente migración debe numerarse `016_...sql`.
+La migración experimental `014_signature_detection_v2.sql` fue retirada del repositorio al descartarse la detección automática de firmas. El volumen local ya la había ejecutado antes del retiro y conserva su asiento y tablas por la regla de no borrado. Los permisos de análisis añadidos a juez y notario se revocaron lógicamente el 3 de agosto de 2026. La migración `015_workspace_accounts.sql` crea las cuatro cuentas por espacio y archiva lógicamente las cuentas `web.*`. La migración `016_automatic_case_folios.sql` agrega secuencias transaccionales por materia y año para generar folios automáticamente. La siguiente migración debe numerarse `017_...sql`.
 
 Los scripts en `/docker-entrypoint-initdb.d` solo se ejecutan al crear un volumen nuevo. En una base existente, aplicar una migración sin borrar el volumen mediante copia binaria al contenedor:
 
 ```powershell
-docker compose cp "..\sistema_nulidad_bd\migrations\016_ejemplo.sql" db:/tmp/016_ejemplo.sql
-docker compose exec -T db sh -c "mysql -uroot -p2318 --default-character-set=utf8mb4 < /tmp/016_ejemplo.sql"
+docker compose cp "..\sistema_nulidad_bd\migrations\017_ejemplo.sql" db:/tmp/017_ejemplo.sql
+docker compose exec -T db sh -c "mysql -uroot -p2318 --default-character-set=utf8mb4 < /tmp/017_ejemplo.sql"
 ```
 
 No canalizar SQL con `Get-Content | docker compose exec`, porque PowerShell dañó acentos en una prueba anterior. No ejecutar `docker compose down -v` salvo autorización explícita: destruye la base y los archivos del entorno.
@@ -380,6 +381,7 @@ sistema_nulidad_bd/migrations/011_spanish_legal_catalogs.sql
 sistema_nulidad_bd/migrations/012_mobile_api_channel.sql
 sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql
 sistema_nulidad_bd/migrations/015_workspace_accounts.sql
+sistema_nulidad_bd/migrations/016_automatic_case_folios.sql
 sistema_nulidad_api/docker-compose.monitoring.yml
 sistema_nulidad_api/src/observability/metrics.js
 sistema_nulidad_api/src/observability/alert-receiver.js

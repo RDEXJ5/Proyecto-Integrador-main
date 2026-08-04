@@ -1223,7 +1223,6 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "POST",
             "process/cases",
             json={
-                "folio": request.form.get("folio", ""),
                 "title": request.form.get("title", ""),
                 "description": request.form.get("description", ""),
                 "caseTypeCode": request.form.get("case_type_code", ""),
@@ -1234,7 +1233,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             },
         )
         created = payload.get("case") or {}
-        flash("Expediente creado y asignado a tu gestión.", "success")
+        generated_folio = created.get("folio")
+        message = f"Expediente {generated_folio} creado y asignado a tu gestión." if generated_folio else "Expediente creado y asignado a tu gestión."
+        flash(message, "success")
         return redirect(url_for("case_detail", case_id=created.get("id")))
 
     @app.post("/process/cases/<int:case_id>/assignments")

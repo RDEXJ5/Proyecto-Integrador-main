@@ -23,6 +23,11 @@ scrape_configs:
     static_configs:
       - targets: [api:3000]
 
+  - job_name: api-movil
+    metrics_path: /metrics
+    static_configs:
+      - targets: [mobile-api:3001]
+
   - job_name: web
     metrics_path: /metrics
     static_configs:
@@ -78,6 +83,7 @@ scrape_configs:
     static_configs:
       - targets:
           - http://api:3000/health
+          - http://mobile-api:3001/health
           - http://web:5000/health
           - http://minio:9000/minio/health/live
     relabel_configs:

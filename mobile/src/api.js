@@ -76,7 +76,7 @@ async function request(method, path, { token, body, formData, timeoutMs = 20000 
       throw new ApiClientError('La solicitud tardó demasiado. Verifica tu conexión.', { code: 'request_timeout' });
     }
     throw new ApiClientError(
-      'No fue posible conectar con el servicio. Verifica tu conexión y que el dispositivo esté en la misma red.',
+      'No fue posible conectar con el servicio. Verifica tu conexión a Internet y que el servicio esté disponible.',
       { code: 'network_error' }
     );
   } finally {

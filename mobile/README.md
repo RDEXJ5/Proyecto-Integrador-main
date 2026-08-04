@@ -83,13 +83,15 @@ Configure `EXPO_PUBLIC_MOBILE_API_URL` según el dispositivo:
 | Expo Web o simulador iOS local | `http://127.0.0.1:3001` |
 | Emulador Android | `http://10.0.2.2:3001` |
 | Teléfono físico | `http://IP_LAN_DEL_EQUIPO:3001` |
+| Dispositivo conectado a Cloud | `https://DOMINIO/mobile-api` |
 
 En desarrollo la aplicación intenta obtener automáticamente la IP del servidor
 Metro. `EXPO_PUBLIC_MOBILE_API_URL` sigue teniendo prioridad cuando se define.
 
 Para un teléfono físico también establezca `MOBILE_API_BIND_ADDRESS=0.0.0.0`
-en `sistema_nulidad_api/.env`, limite el firewall a la red privada y use HTTPS
-fuera de una prueba local.
+en `sistema_nulidad_api/.env` y limite el firewall a la red privada. Para Cloud,
+use siempre el dominio HTTPS y la ruta `/mobile-api`; no indique la IP privada
+ni publique directamente el puerto `3001`.
 
 Las variables `EXPO_PUBLIC_*` son públicas dentro del paquete compilado. Nunca
 coloque ahí `API_APPLICATION_KEY`, credenciales de MySQL, claves de MinIO ni

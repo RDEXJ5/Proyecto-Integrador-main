@@ -25,6 +25,7 @@ services:
       - ../../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/docker-entrypoint-initdb.d/12-mobile-api-channel.sql:ro
       - ../../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/docker-entrypoint-initdb.d/13-mobile-registration-invitations.sql:ro
       - ../../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/docker-entrypoint-initdb.d/15-workspace-accounts.sql:ro
+      - ../../sistema_nulidad_bd/migrations/016_automatic_case_folios.sql:/docker-entrypoint-initdb.d/16-automatic-case-folios.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
@@ -48,12 +49,14 @@ services:
       - ../../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/migrations/012_mobile_api_channel.sql:ro
       - ../../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/migrations/013_mobile_registration_invitations.sql:ro
       - ../../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/migrations/015_workspace_accounts.sql:ro
+      - ../../sistema_nulidad_bd/migrations/016_automatic_case_folios.sql:/migrations/016_automatic_case_folios.sql:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
         mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/012_mobile_api_channel.sql &&
         mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/013_mobile_registration_invitations.sql &&
-        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/015_workspace_accounts.sql
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/015_workspace_accounts.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/016_automatic_case_folios.sql
     networks:
       - data
     cap_drop:
@@ -169,6 +172,54 @@ services:
       - cloud-link
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  mobile-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node", "src/mobile-server.js"]
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      minio-setup:
+        condition: service_completed_successfully
+    env_file:
+      - ${PRIVATE_STORAGE_ENV_FILE:-./private.storage.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER:?Defina MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      JWT_ISSUER: ${JWT_ISSUER:-sistema-nulidad-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sistema-nulidad-clients}
+      API_APPLICATION_KEY: ${API_APPLICATION_KEY:?Defina API_APPLICATION_KEY}
+      PLATFORM_SIGNATURE_SECRET: ${PLATFORM_SIGNATURE_SECRET:?Defina PLATFORM_SIGNATURE_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Defina CORS_ORIGINS con el dominio HTTPS}
+    ports:
+      - "${PRIVATE_BIND_ADDRESS:?Defina PRIVATE_BIND_ADDRESS}:3001:3001"
+    networks:
+      - data
+      - monitoring
+      - cloud-link
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12

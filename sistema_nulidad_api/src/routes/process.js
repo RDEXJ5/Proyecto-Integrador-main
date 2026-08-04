@@ -3,6 +3,7 @@ import { pool, withTransaction } from '../db.js';
 import { ApiError } from '../errors.js';
 import { hasPermission } from '../security/authorization.js';
 import { assertCaseAccess, loadCase, parseId } from '../security/resource-access.js';
+import { reserveNextCaseFolio } from '../services/case-folio-service.js';
 
 const router = Router();
 const assignmentScopes = new Set(['full', 'documental', 'procedural', 'review', 'audit']);
@@ -173,7 +174,6 @@ router.get('/catalogs', async (request, response, next) => {
 router.post('/cases', async (request, response, next) => {
   try {
     requireProcessPermission(request, 'case.create');
-    const folio = requiredText(request.body?.folio, 3, 40, 'El folio debe contener entre 3 y 40 caracteres.');
     const title = requiredText(request.body?.title, 5, 255, 'El título debe contener entre 5 y 255 caracteres.');
     const description = nullableText(request.body?.description, 8000);
     const caseTypeCode = requiredText(request.body?.caseTypeCode, 1, 50, 'Seleccione un tipo de expediente.');
@@ -189,10 +189,8 @@ router.post('/cases', async (request, response, next) => {
     const statusReason = requiredText(request.body?.statusReason, 5, 1000, 'Indique el motivo de apertura.');
 
     const caseRecord = await withTransaction(async (connection) => {
-      const [duplicates] = await connection.execute('SELECT id FROM cases WHERE folio = ? LIMIT 1', [folio]);
-      if (duplicates.length > 0) throw new ApiError(409, 'folio_already_exists', 'El folio ya está registrado.');
       const [catalogRows] = await connection.execute(
-        `SELECT case_type.code,
+        `SELECT case_type.code, case_type.legal_area_code,
                 (SELECT stage.stage_code FROM case_stage_definitions stage
                  WHERE stage.case_type_code = case_type.code AND stage.is_active = TRUE
                  ORDER BY stage.sequence_number LIMIT 1) AS initial_stage_code
@@ -211,12 +209,26 @@ router.post('/cases', async (request, response, next) => {
         throw new ApiError(403, 'case_catalog_not_allowed', 'El tipo o la unidad no están autorizados para tu cuenta.');
       }
       const initialStageCode = catalogRows[0].initial_stage_code;
-      const [inserted] = await connection.execute(
-        `INSERT INTO cases (
-           folio, title, description, status, lawyer_user_id, judge_user_id, created_by_user_id
-         ) VALUES (?, ?, ?, 'active', NULL, NULL, ?)`,
-        [folio, title, description, request.auth.user.id]
-      );
+      const legalAreaCode = catalogRows[0].legal_area_code;
+      let folio;
+      let inserted;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        folio = await reserveNextCaseFolio(connection, legalAreaCode);
+        try {
+          [inserted] = await connection.execute(
+            `INSERT INTO cases (
+               folio, title, description, status, lawyer_user_id, judge_user_id, created_by_user_id
+             ) VALUES (?, ?, ?, 'active', NULL, NULL, ?)`,
+            [folio, title, description, request.auth.user.id]
+          );
+          break;
+        } catch (error) {
+          if (error?.code !== 'ER_DUP_ENTRY') throw error;
+        }
+      }
+      if (!inserted) {
+        throw new ApiError(409, 'folio_generation_conflict', 'No fue posible reservar un folio único. Intenta nuevamente.');
+      }
       const caseId = inserted.insertId;
       await connection.execute(
         `INSERT INTO case_profiles (
@@ -262,6 +274,8 @@ router.post('/cases', async (request, response, next) => {
       );
       await audit(connection, request, 'case.created', 'case', caseId, {
         folio,
+        folioGeneration: 'automatic',
+        legalAreaCode,
         caseTypeCode,
         organizationalUnitId,
         initialStatus,

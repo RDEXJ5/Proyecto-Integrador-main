@@ -1,21 +1,23 @@
 # Despliegue dividido en Google Cloud
 
-Esta configuración publica exclusivamente la versión web y conserva la
-aplicación móvil en el entorno local. No reemplaza los archivos
-`docker-compose.yml` y `docker-compose.monitoring.yml` existentes.
+Esta configuración publica la versión web y la API móvil. La aplicación móvil
+se ejecuta en los dispositivos de desarrollo, pero consume la información
+compartida de Cloud mediante HTTPS. No reemplaza los archivos
+`docker-compose.yml` y `docker-compose.monitoring.yml` del entorno local.
 
 ## Arquitectura
 
 | Servidor | Servicios principales | Exposición |
 |---|---|---|
 | Público `gdi-edge` | HAProxy y Grafana | Internet: `80` y `443`. VPC: métricas de Grafana, HAProxy, cAdvisor y Node Exporter. |
-| Privado `gdi-private` | Flask, API web, MySQL, MinIO, Prometheus, Loki, Alertmanager y exportadores | Sin IP pública. Web, API, Prometheus y Loki escuchan únicamente en la IP interna reservada. |
+| Privado `gdi-private` | Flask, API web, API móvil, MySQL, MinIO, Prometheus, Loki, Alertmanager y exportadores | Sin IP pública. Web, APIs, Prometheus y Loki escuchan únicamente en la IP interna reservada. |
 
 Alloy y los exportadores del servidor público son agentes auxiliares. No
 atienden usuarios y solo envían registros y métricas al servidor privado.
 
-La API móvil no se despliega en Google Cloud y HAProxy no publica una ruta
-`/mobile-api`. El entorno local continúa usando los archivos Compose originales.
+HAProxy publica la API móvil exclusivamente bajo `/mobile-api` y elimina ese
+prefijo antes de reenviar la solicitud al puerto privado `3001`. MySQL y MinIO
+permanecen inaccesibles desde Internet.
 
 ## Archivos
 
@@ -24,7 +26,7 @@ La API móvil no se despliega en Google Cloud y HAProxy no publica una ruta
 - `private.env.example` y `private.storage.env.example`: variables privadas.
 - `edge.env.example`: variables del borde público.
 - `haproxy/`: proxy HTTPS que exige un certificado real.
-- `prometheus/`: objetivos y alertas adaptados a dos servidores, sin exigir la API móvil.
+- `prometheus/`: objetivos y alertas adaptados a los servicios de ambos servidores.
 - `grafana/`: orígenes privados de Prometheus y Loki.
 - `alloy/`: recolección de registros del servidor público.
 
@@ -48,12 +50,12 @@ Use cuentas de servicio o etiquetas distintas, por ejemplo `gdi-edge` y
 | Destino | Origen permitido | Puertos TCP | Motivo |
 |---|---|---|---|
 | Público | Internet | `80`, `443` | Redirección HTTPS y sistema web. |
-| Privado | Público | `3000`, `5000` | API web y Flask mediante HAProxy. |
+| Privado | Público | `3000`, `3001`, `5000` | API web, API móvil y Flask mediante HAProxy. |
 | Privado | Público | `9090`, `3100` | Consultas de Grafana y envío de logs de Alloy. |
 | Público | Privado | `3000`, `8080`, `8405`, `9100` | Métricas de Grafana, contenedores, HAProxy y host. |
 | Ambos | Rango IAP `35.235.240.0/20` | `22` | Administración SSH mediante IAP. |
 
-No abra a Internet `3000`, `5000`, `9090`, `3100`, `3306`, `9000`, `9001`,
+No abra a Internet `3000`, `3001`, `5000`, `9090`, `3100`, `3306`, `9000`, `9001`,
 `8080`, `8405` ni `9100`. MySQL y MinIO no se publican ni siquiera en la VPC;
 solo sus contenedores autorizados pueden alcanzarlos.
 
@@ -161,6 +163,7 @@ Desde el servidor público:
 
 ```bash
 curl --fail http://PRIVATE_IP:3000/health
+curl --fail http://PRIVATE_IP:3001/health
 curl --fail http://PRIVATE_IP:5000/health
 curl --fail http://PRIVATE_IP:9090/-/ready
 curl --fail http://PRIVATE_IP:3100/ready
@@ -179,12 +182,14 @@ Desde Internet:
 ```bash
 curl --fail https://DOMINIO/__proxy_health
 curl --fail https://DOMINIO/api/health
+curl --fail https://DOMINIO/mobile-api/health
 curl --fail --head https://DOMINIO/login
 ```
 
 Confirme después:
 
-- inicio de sesión de los cuatro espacios web;
+- inicio de sesión de los espacios web y de administración;
+- registro e inicio de sesión desde la aplicación móvil;
 - aislamiento de expedientes y permisos;
 - carga, visualización y versionamiento de un PDF de prueba;
 - los objetivos de Prometheus en estado `UP`;
@@ -192,10 +197,18 @@ Confirme después:
 - disparo controlado de una alerta;
 - restauración de un respaldo de prueba.
 
-## Aplicación móvil local
+## Aplicación móvil
 
-Nada de esta carpeta cambia `mobile/App.js`, el puerto `3001` ni la API móvil
-local. Para continuar trabajando localmente se mantienen los comandos actuales:
+El cliente Expo continúa ejecutándose localmente, mientras que la API móvil de
+producción utiliza la base de datos y el almacenamiento del servidor privado.
+Configure el cliente con una URL HTTPS que contenga el dominio, nunca la IP
+interna ni el puerto `3001`:
+
+```env
+EXPO_PUBLIC_MOBILE_API_URL=https://DOMINIO/mobile-api
+```
+
+Para trabajar con una API completamente local se mantienen los comandos:
 
 ```powershell
 cd C:\Users\britz\Downloads\Proyecto-Integrador-main\Proyecto-Integrador-main\sistema_nulidad_api
@@ -209,11 +222,10 @@ y sus dependencias:
 docker compose up --build -d mobile-api
 ```
 
-La base cloud y la base local son entornos independientes y no se sincronizan
-automáticamente. Esta separación evita exponer MySQL o MinIO para mantener la
-aplicación móvil local. Si en el futuro se requiere información compartida en
-tiempo real, deberá publicarse una API móvil HTTPS controlada; nunca se debe
-abrir MySQL directamente a los teléfonos.
+La base cloud y una base local siguen siendo entornos independientes y no se
+sincronizan automáticamente. Para trabajar con los datos en línea, el cliente
+debe utilizar `/mobile-api`. Nunca se debe abrir MySQL o MinIO directamente a
+los teléfonos.
 
 ## Respaldos
 

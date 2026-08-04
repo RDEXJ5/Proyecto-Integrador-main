@@ -30,9 +30,14 @@ Invoke-RestMethod http://127.0.0.1:5000/login
 ```
 
 Las migraciones `012_mobile_api_channel.sql`,
-`013_mobile_registration_invitations.sql` y `015_workspace_accounts.sql` se ejecutan de forma idempotente tanto
+`013_mobile_registration_invitations.sql`, `015_workspace_accounts.sql` y
+`016_automatic_case_folios.sql` se ejecutan de forma idempotente tanto
 en bases nuevas como en un volumen existente. No es necesario eliminar el
 volumen para habilitar la API móvil, el registro o las invitaciones.
+
+Los expedientes creados desde gestión procesal reciben un folio automático por
+materia y año, por ejemplo `CIV-2026-000001`. La secuencia se reserva dentro de
+la misma transacción que crea el expediente para impedir duplicados.
 
 Para cargar las cuentas y expedientes de demostración, use el perfil opcional
 después de levantar el stack. Las cuatro cuentas web operativas usan la

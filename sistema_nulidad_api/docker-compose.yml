@@ -23,6 +23,7 @@ services:
       - ../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/docker-entrypoint-initdb.d/12-mobile-api-channel.sql:ro
       - ../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/docker-entrypoint-initdb.d/13-mobile-registration-invitations.sql:ro
       - ../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/docker-entrypoint-initdb.d/15-workspace-accounts.sql:ro
+      - ../sistema_nulidad_bd/migrations/016_automatic_case_folios.sql:/docker-entrypoint-initdb.d/16-automatic-case-folios.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
@@ -46,12 +47,14 @@ services:
       - ../sistema_nulidad_bd/migrations/012_mobile_api_channel.sql:/migrations/012_mobile_api_channel.sql:ro
       - ../sistema_nulidad_bd/migrations/013_mobile_registration_invitations.sql:/migrations/013_mobile_registration_invitations.sql:ro
       - ../sistema_nulidad_bd/migrations/015_workspace_accounts.sql:/migrations/015_workspace_accounts.sql:ro
+      - ../sistema_nulidad_bd/migrations/016_automatic_case_folios.sql:/migrations/016_automatic_case_folios.sql:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
         mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/012_mobile_api_channel.sql &&
         mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/013_mobile_registration_invitations.sql &&
-        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/015_workspace_accounts.sql
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/015_workspace_accounts.sql &&
+        mysql --host=db --user=root --default-character-set=utf8mb4 < /migrations/016_automatic_case_folios.sql
     networks:
       - private
     cap_drop:

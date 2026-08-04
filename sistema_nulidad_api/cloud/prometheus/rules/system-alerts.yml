@@ -2,7 +2,7 @@ groups:
   - name: disponibilidad-cloud
     rules:
       - alert: ServicioNoDisponible
-        expr: up{job=~"api-web|web|mysql|minio|haproxy|grafana"} == 0
+        expr: up{job=~"api-web|api-movil|web|mysql|minio|haproxy|grafana"} == 0
         for: 2m
         labels:
           severity: critical

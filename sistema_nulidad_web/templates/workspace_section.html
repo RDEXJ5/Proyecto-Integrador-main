@@ -21,12 +21,12 @@
 
   {% if workspace.code == 'process' and section_code == 'cases' and 'case.create' in current_permissions %}
     <section class="document-upload-panel">
-      <div class="upload-panel-heading"><div><span class="sidebar-eyebrow">ALTA PROCESAL</span><h2>Crear expediente</h2><p>El expediente se crea sin responsables jurídicos implícitos; tu cuenta queda asignada para continuar la gestión.</p></div></div>
+      <div class="upload-panel-heading"><div><span class="sidebar-eyebrow">ALTA PROCESAL</span><h2>Crear expediente</h2><p>El sistema genera el folio automáticamente y asigna tu cuenta para continuar la gestión.</p></div></div>
       <details class="creation-disclosure">
         <summary class="button button-primary">+ Nuevo expediente</summary>
         <form class="document-form creation-form" method="post" action="{{ url_for('create_process_case') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-grid"><label><span>Folio</span><input name="folio" minlength="3" maxlength="40" required></label><label><span>Título</span><input name="title" minlength="5" maxlength="255" required></label></div>
+        <div class="form-grid"><label><span>Folio</span><input value="Se generará automáticamente" disabled aria-describedby="automatic-folio-help"><small id="automatic-folio-help">Se asignará según la materia, el año y la secuencia correspondiente.</small></label><label><span>Título</span><input name="title" minlength="5" maxlength="255" required></label></div>
         <label><span>Descripción</span><textarea name="description" maxlength="8000" rows="3"></textarea></label>
         <div class="form-grid">
           <label><span>Tipo de expediente</span><select name="case_type_code" required><option value="">Selecciona</option>{% for item in process_catalogs.caseTypes or [] %}<option value="{{ item.code }}">{{ item.legal_area_label }} - {{ item.label }}</option>{% endfor %}</select></label>

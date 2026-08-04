@@ -555,6 +555,34 @@ class WorkspaceWebTest(unittest.TestCase):
         self.assertIn("+ Nuevo expediente".encode(), response.data)
         self.assertIn(b'class="creation-disclosure"', response.data)
         self.assertIn(b"civil_proceeding", response.data)
+        self.assertIn("Se generará automáticamente".encode(), response.data)
+        self.assertNotIn(b'name="folio"', response.data)
+
+    @patch("app.call_api")
+    def test_process_case_creation_leaves_folio_to_the_api(self, call_api_mock):
+        call_api_mock.return_value = {
+            "case": {"id": 12, "folio": "CIV-2026-000012", "title": "Expediente automático"}
+        }
+        self.set_session("secretary", permissions=("case.create",))
+
+        response = self.client.post(
+            "/process/cases",
+            data={
+                "title": "Expediente automático",
+                "description": "Descripción de prueba.",
+                "case_type_code": "civil_proceeding",
+                "organizational_unit_id": "1",
+                "confidentiality_level": "internal",
+                "initial_status": "active",
+                "status_reason": "Apertura para comprobar el folio automático.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/cases/12"))
+        payload = call_api_mock.call_args.kwargs["json"]
+        self.assertNotIn("folio", payload)
+        self.assertEqual(payload["caseTypeCode"], "civil_proceeding")
 
     @patch("app.call_api")
     def test_case_filters_adapt_to_process_workspace(self, call_api_mock):
