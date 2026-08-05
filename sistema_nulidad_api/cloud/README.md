@@ -157,6 +157,37 @@ docker compose --env-file edge.env -f docker-compose.edge.yml up --build -d
 docker compose --env-file edge.env -f docker-compose.edge.yml ps -a
 ```
 
+## Protección contra saturación
+
+El HAProxy público limita las ráfagas antes de que alcancen Flask o las API. Los
+valores iniciales se encuentran en `edge.env.example`:
+
+- `HAPROXY_REQUESTS_PER_10S`: solicitudes permitidas por IP en diez segundos;
+- `HAPROXY_GRAFANA_REQUESTS_PER_10S`: límite independiente para el panel de Grafana;
+- `HAPROXY_CONNECTIONS_PER_IP`: conexiones simultáneas permitidas por IP;
+- `HAPROXY_*_MAXCONN`: conexiones enviadas simultáneamente a cada backend;
+- `HAPROXY_BACKEND_MAXQUEUE`: solicitudes que pueden esperar por backend.
+
+El endpoint `/__proxy_health` no consume la cuota y Grafana dispone de un límite
+independiente. Cuando un cliente excede su límite, HAProxy responde `429`; cuando un backend y su cola están saturados,
+responde `503`. Los backends se comprueban cada cinco segundos, se retiran tras
+tres fallos consecutivos y regresan después de dos comprobaciones correctas.
+
+No aumente los límites sin comprobar antes CPU, memoria, conexiones de MySQL y
+latencia. Para validar la configuración generada sin publicar puertos:
+
+```bash
+docker compose --env-file edge.env -f docker-compose.edge.yml build haproxy
+docker compose --env-file edge.env -f docker-compose.edge.yml run --rm --no-deps haproxy --check
+```
+
+Después de desplegar, confirme el estado del contenedor y el proxy:
+
+```bash
+docker compose --env-file edge.env -f docker-compose.edge.yml ps haproxy
+curl --fail https://DOMINIO/__proxy_health
+```
+
 ## Comprobaciones
 
 Desde el servidor público:

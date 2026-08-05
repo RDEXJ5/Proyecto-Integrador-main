@@ -46,10 +46,26 @@ services:
     depends_on:
       grafana:
         condition: service_started
+    environment:
+      HAPROXY_GLOBAL_MAXCONN: ${HAPROXY_GLOBAL_MAXCONN:-4096}
+      HAPROXY_REQUESTS_PER_10S: ${HAPROXY_REQUESTS_PER_10S:-30}
+      HAPROXY_GRAFANA_REQUESTS_PER_10S: ${HAPROXY_GRAFANA_REQUESTS_PER_10S:-100}
+      HAPROXY_CONNECTIONS_PER_IP: ${HAPROXY_CONNECTIONS_PER_IP:-10}
+      HAPROXY_WEB_API_MAXCONN: ${HAPROXY_WEB_API_MAXCONN:-100}
+      HAPROXY_MOBILE_API_MAXCONN: ${HAPROXY_MOBILE_API_MAXCONN:-100}
+      HAPROXY_WEB_MAXCONN: ${HAPROXY_WEB_MAXCONN:-32}
+      HAPROXY_GRAFANA_MAXCONN: ${HAPROXY_GRAFANA_MAXCONN:-50}
+      HAPROXY_BACKEND_MAXQUEUE: ${HAPROXY_BACKEND_MAXQUEUE:-100}
     ports:
       - "0.0.0.0:80:80"
       - "0.0.0.0:443:443"
       - "${EDGE_PRIVATE_BIND_ADDRESS:?Defina EDGE_PRIVATE_BIND_ADDRESS}:8405:8405"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8405/metrics >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     volumes:
       - ${TLS_CERT_FILE:?Defina TLS_CERT_FILE}:/certs/server.pem:ro
     extra_hosts:
